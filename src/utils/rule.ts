@@ -32,6 +32,7 @@ export function checkImages() {
           ? 'fail'
           : 'pass';
     return {
+      element: img,
       hidden: !visible,
       src: absoluteSrc,
       alt: img.getAttribute('alt'),
@@ -71,6 +72,7 @@ export function checkBgImages() {
       const valid = 'unknown';
 
       return {
+        element: el,
         hidden: !visible,
         src: absoluteSrc,
         alt: el.getAttribute('aria-label') || el.getAttribute('title') || '',
@@ -130,6 +132,7 @@ export function checkTables() {
     }
 
     return {
+      element: table,
       caption,
       summary,
       thead: !!thead,
@@ -212,6 +215,7 @@ export function checkFocus() {
       }
 
       return {
+        element: element,
         tag: element.tagName.toLowerCase(),
         text: element.textContent?.trim() || '',
         issueType,
@@ -239,6 +243,7 @@ export function checkSkipNav() {
             document.getElementsByName(href.replace('#', '')).length > 0;
       const valid = isConnectedLink ? 'pass' : 'fail';
       return {
+        element: a,
         label: index + 1 + '번째 링크',
         value: '(' + href + ') ' + a.innerText,
         connected: isConnectedLink,
@@ -321,6 +326,7 @@ export function checkPageTitle() {
   }
 
   return {
+    element: document,
     title,
     valid: hasTitle && !hasSpecialCharactersDup ? 'pass' : 'fail',
   };
@@ -351,6 +357,7 @@ export function checkFrames() {
       style.visibility !== 'hidden' &&
       style.display !== 'none';
     return {
+      element: frame,
       label: 'iframe',
       value: frame.getAttribute('title') || '',
       contents: frame.getAttribute('src') || '',
@@ -372,6 +379,7 @@ export function checkHeadings() {
         style.visibility !== 'hidden' &&
         style.display !== 'none';
       return {
+        element: heading,
         label: 'heading',
         value: heading.tagName.toLowerCase(),
         contents: heading.textContent?.trim() || '',
@@ -424,6 +432,7 @@ export function checkPageLang() {
         }
 
         return {
+          element: doc,
           lang: lang || '',
           url,
           valid,
@@ -483,6 +492,7 @@ export function checkUserRequest() {
         valid = 'pass';
       }
       results.push({
+        element: el,
         tag: el.tagName.toLowerCase(),
         title,
         target: el.getAttribute('target') || '',
@@ -516,7 +526,6 @@ export function checkInputLabels() {
 
   return inputs.map((input) => {
     const isHidden = !isVisible(input);
-    const element = input.tagName.toLowerCase();
     const type = input.getAttribute('type') || 'text';
     const title = input.getAttribute('title') || '';
     let label = '';
@@ -549,8 +558,8 @@ export function checkInputLabels() {
     }
 
     return {
+      element: input,
       hidden: isHidden,
-      element,
       type,
       label,
       valid: hasLabel ? 'pass' : hasTitle ? 'warning' : 'fail',
