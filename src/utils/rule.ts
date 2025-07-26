@@ -560,6 +560,7 @@ export function checkInputLabels() {
     return {
       element: input,
       hidden: isHidden,
+      tagName: input.tagName.toLowerCase(),
       type,
       label,
       valid: hasLabel ? 'pass' : hasTitle ? 'warning' : 'fail',
