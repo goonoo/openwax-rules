@@ -207,6 +207,10 @@ export function checkFocus() {
           issueValue = cssText;
         }
       }
+      const visible =
+        element.offsetParent !== null &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none';
 
       // 4. valid 판정
       let valid = 'pass';
@@ -223,6 +227,7 @@ export function checkFocus() {
         valid,
         hasBlurEvent,
         hasOutlineZero,
+        hidden: !visible,
       };
     })
     .filter((item) => item !== null && item.valid === 'fail'); // 문제가 있는 요소만 반환
@@ -242,7 +247,12 @@ export function checkSkipNav() {
           : !!document.getElementById(href.replace('#', '')) ||
             document.getElementsByName(href.replace('#', '')).length > 0;
       const valid = isConnectedLink ? 'pass' : 'fail';
+      const visible =
+        a.offsetParent !== null &&
+        a.style.visibility !== 'hidden' &&
+        a.style.display !== 'none';
       return {
+        hidden: !visible,
         element: a,
         label: index + 1 + '번째 링크',
         value: '(' + href + ') ' + a.innerText,
@@ -418,6 +428,11 @@ export function checkPageLang() {
         const xmlLang = html?.getAttribute('xml:lang') || '';
         const url = doc.location.href || '';
 
+        // http 이외의 페이지는 검사하지 않음
+        if (url.indexOf('http://') === -1  && url.indexOf('https://') === -1) {
+          return null;
+        }
+
         let valid = 'fail';
         let value = '';
         if (isXhtml && xmlLang && lang) {
@@ -491,6 +506,10 @@ export function checkUserRequest() {
       if (title) {
         valid = 'pass';
       }
+      const visible =
+        el.offsetParent !== null &&
+        el.style.visibility !== 'hidden' &&
+        el.style.display !== 'none';
       results.push({
         element: el,
         tag: el.tagName.toLowerCase(),
@@ -498,6 +517,7 @@ export function checkUserRequest() {
         target: el.getAttribute('target') || '',
         text: el.textContent || '',
         valid,
+        hidden: !visible,
       });
     }
   });
@@ -627,6 +647,11 @@ export function checkWebApplication(): WebApplicationResult[] {
       );
     }
 
+    const visible =
+      tablist.offsetParent !== null &&
+      tablist.style.visibility !== 'hidden' &&
+      tablist.style.display !== 'none';
+
     results.push({
       interface: 'tablist',
       index: index + 1,
@@ -634,6 +659,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       tabpanels: connectedTabpanels.length,
       valid,
       issues,
+      hidden: !visible,
     });
   });
 
@@ -663,6 +689,11 @@ export function checkWebApplication(): WebApplicationResult[] {
       issues.push('menu/menubar 내부에 menuitem이 없음');
     }
 
+    const visible =
+      menu.offsetParent !== null &&
+      menu.style.visibility !== 'hidden' &&
+      menu.style.display !== 'none';
+
     results.push({
       interface: menu.getAttribute('role'),
       index: index + 1,
@@ -671,6 +702,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       menuitemradios: menuitemradios.length,
       valid,
       issues,
+      hidden: !visible,
     });
   });
 
@@ -695,6 +727,11 @@ export function checkWebApplication(): WebApplicationResult[] {
       issues.push('listbox가 있지만 option이 없음');
     }
 
+    const visible =
+      combobox.offsetParent !== null &&
+      combobox.style.visibility !== 'hidden' &&
+      combobox.style.display !== 'none';
+
     results.push({
       interface: 'combobox',
       index: index + 1,
@@ -702,6 +739,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       options: options.length,
       valid,
       issues,
+      hidden: !visible,
     });
   });
 
@@ -774,6 +812,11 @@ export function checkWebApplication(): WebApplicationResult[] {
       }
     }
 
+    const visible =
+      grid.offsetParent !== null &&
+      grid.style.visibility !== 'hidden' &&
+      grid.style.display !== 'none';
+
     results.push({
       interface: grid.getAttribute('role'),
       index: index + 1,
@@ -783,6 +826,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       cells: cells.length,
       valid,
       issues,
+      hidden: !visible,
     });
   });
 
@@ -801,6 +845,11 @@ export function checkWebApplication(): WebApplicationResult[] {
       issues.push('tree 내부에 treeitem이 없음');
     }
 
+    const visible =
+      tree.offsetParent !== null &&
+      tree.style.visibility !== 'hidden' &&
+      tree.style.display !== 'none';
+
     results.push({
       interface: 'tree',
       index: index + 1,
@@ -808,6 +857,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       groups: groups.length,
       valid,
       issues,
+      hidden: !visible,
     });
   });
 
@@ -830,12 +880,18 @@ export function checkWebApplication(): WebApplicationResult[] {
       issues.push('dialog에 제목(aria-labelledby, aria-label, heading)이 없음');
     }
 
+    const visible =
+      dialog.offsetParent !== null &&
+      dialog.style.visibility !== 'hidden' &&
+      dialog.style.display !== 'none';
+
     results.push({
       interface: dialog.getAttribute('role'),
       index: index + 1,
       hasTitle: !!hasTitle,
       valid,
       issues,
+      hidden: !visible,
     });
   });
 
@@ -857,12 +913,18 @@ export function checkWebApplication(): WebApplicationResult[] {
       issues.push('toolbar 내부에 상호작용 요소(button, link, input)가 없음');
     }
 
+    const visible =
+      toolbar.offsetParent !== null &&
+      toolbar.style.visibility !== 'hidden' &&
+      toolbar.style.display !== 'none';
+
     results.push({
       interface: 'toolbar',
       index: index + 1,
       buttons: buttons.length,
       links: links.length,
       inputs: inputs.length,
+      hidden: !visible,
       valid,
       issues,
     });
