@@ -75,7 +75,7 @@ export function checkBgImages() {
         element: el,
         hidden: !visible,
         src: absoluteSrc,
-        alt: el.getAttribute('aria-label') || el.getAttribute('title') || '',
+        alt: el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '',
         valid,
       };
     });
