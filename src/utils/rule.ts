@@ -653,6 +653,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       tablist.style.display !== 'none';
 
     results.push({
+      element: tablist,
       interface: 'tablist',
       index: index + 1,
       tabs: tabs.length,
@@ -695,6 +696,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       menu.style.display !== 'none';
 
     results.push({
+      element: menu,
       interface: menu.getAttribute('role'),
       index: index + 1,
       menuitems: menuitems.length,
@@ -733,6 +735,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       combobox.style.display !== 'none';
 
     results.push({
+      element: combobox,
       interface: 'combobox',
       index: index + 1,
       hasListbox: !!listbox,
@@ -818,6 +821,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       grid.style.display !== 'none';
 
     results.push({
+      element: grid,
       interface: grid.getAttribute('role'),
       index: index + 1,
       rows: rows.length,
@@ -851,6 +855,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       tree.style.display !== 'none';
 
     results.push({
+      element: tree,
       interface: 'tree',
       index: index + 1,
       treeitems: treeitems.length,
@@ -886,6 +891,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       dialog.style.display !== 'none';
 
     results.push({
+      element: dialog,
       interface: dialog.getAttribute('role'),
       index: index + 1,
       hasTitle: !!hasTitle,
@@ -919,6 +925,7 @@ export function checkWebApplication(): WebApplicationResult[] {
       toolbar.style.display !== 'none';
 
     results.push({
+      element: toolbar,
       interface: 'toolbar',
       index: index + 1,
       buttons: buttons.length,
