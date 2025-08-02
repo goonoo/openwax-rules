@@ -1142,6 +1142,83 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
     });
   });
 
+  describe('리스트 박스 인터페이스 검사', () => {
+    it('listbox 내부에 option이 없으면 fail', () => {
+      document.body.innerHTML = `
+        <div role="listbox">
+          <div>일반 요소</div>
+        </div>
+      `;
+      const results = checkWebApplication();
+      const listboxResult = results.find((r) => r.interface === 'listbox');
+      expect(listboxResult?.valid).toBe('fail');
+      expect(listboxResult?.issues).toContain('listbox 내부에 option이 없음');
+    });
+
+    it('listbox에 option이 있으면 pass', () => {
+      document.body.innerHTML = `
+        <div role="listbox" aria-label="과일 선택">
+          <div role="option">사과</div>
+          <div role="option">바나나</div>
+          <div role="option">오렌지</div>
+        </div>
+      `;
+      const results = checkWebApplication();
+      const listboxResult = results.find((r) => r.interface === 'listbox');
+      expect(listboxResult?.valid).toBe('pass');
+      expect(listboxResult?.options).toBe(3);
+      expect(listboxResult?.groups).toBe(0);
+    });
+
+    it('group을 사용한 listbox도 pass', () => {
+      document.body.innerHTML = `
+        <div role="listbox" aria-label="음식 선택">
+          <div role="group" aria-label="과일">
+            <div role="option">사과</div>
+            <div role="option">바나나</div>
+          </div>
+          <div role="group" aria-label="채소">
+            <div role="option">당근</div>
+            <div role="option">브로콜리</div>
+          </div>
+        </div>
+      `;
+      const results = checkWebApplication();
+      const listboxResult = results.find((r) => r.interface === 'listbox');
+      expect(listboxResult?.valid).toBe('pass');
+      expect(listboxResult?.options).toBe(4);
+      expect(listboxResult?.groups).toBe(2);
+    });
+  });
+
+  describe('라디오 그룹 인터페이스 검사', () => {
+    it('radiogroup 내부에 radio가 없으면 fail', () => {
+      document.body.innerHTML = `
+        <div role="radiogroup" aria-label="성별">
+          <div>일반 요소</div>
+        </div>
+      `;
+      const results = checkWebApplication();
+      const radiogroupResult = results.find((r) => r.interface === 'radiogroup');
+      expect(radiogroupResult?.valid).toBe('fail');
+      expect(radiogroupResult?.issues).toContain('radiogroup 내부에 radio가 없음');
+    });
+
+    it('radiogroup에 radio가 있으면 pass', () => {
+      document.body.innerHTML = `
+        <div role="radiogroup" aria-label="성별">
+          <div role="radio" aria-checked="true">남성</div>
+          <div role="radio" aria-checked="false">여성</div>
+          <div role="radio" aria-checked="false">기타</div>
+        </div>
+      `;
+      const results = checkWebApplication();
+      const radiogroupResult = results.find((r) => r.interface === 'radiogroup');
+      expect(radiogroupResult?.valid).toBe('pass');
+      expect(radiogroupResult?.radios).toBe(3);
+    });
+  });
+
   describe('복합 인터페이스 검사', () => {
     it('여러 인터페이스가 동시에 존재할 때 모두 검사한다', () => {
       document.body.innerHTML = `
@@ -1155,17 +1232,27 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
         <div role="dialog" aria-label="다이얼로그">
           <div>내용</div>
         </div>
+        <div role="listbox">
+          <div role="option">옵션1</div>
+        </div>
+        <div role="radiogroup" aria-label="선택">
+          <div role="radio">라디오1</div>
+        </div>
       `;
       const results = checkWebApplication();
-      expect(results.length).toBe(3);
+      expect(results.length).toBe(5);
 
       const tablistResult = results.find((r) => r.interface === 'tablist');
       const menuResult = results.find((r) => r.interface === 'menu');
       const dialogResult = results.find((r) => r.interface === 'dialog');
+      const listboxResult = results.find((r) => r.interface === 'listbox');
+      const radiogroupResult = results.find((r) => r.interface === 'radiogroup');
 
       expect(tablistResult?.valid).toBe('pass');
       expect(menuResult?.valid).toBe('pass');
       expect(dialogResult?.valid).toBe('pass');
+      expect(listboxResult?.valid).toBe('pass');
+      expect(radiogroupResult?.valid).toBe('pass');
     });
 
     it('인터페이스가 없으면 빈 배열을 반환한다', () => {

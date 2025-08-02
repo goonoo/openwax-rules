@@ -909,5 +909,67 @@ export function checkWebApplication(): WebApplicationResult[] {
     });
   });
 
+  // 8. 리스트 박스 인터페이스 검사
+  const listboxes = Array.from(document.querySelectorAll('[role="listbox"]'));
+  listboxes.forEach((listbox, index) => {
+    const options = Array.from(listbox.querySelectorAll('[role="option"]'));
+    const groups = Array.from(listbox.querySelectorAll('[role="group"]'));
+
+    let valid = 'pass';
+    const issues = [];
+
+    // listbox 내부에 option이 없으면 fail
+    if (options.length === 0) {
+      valid = 'fail';
+      issues.push('listbox 내부에 option이 없음');
+    }
+
+    const visible =
+      listbox.offsetParent !== null &&
+      listbox.style.visibility !== 'hidden' &&
+      listbox.style.display !== 'none';
+
+    results.push({
+      element: listbox,
+      interface: 'listbox',
+      index: index + 1,
+      options: options.length,
+      groups: groups.length,
+      valid,
+      issues,
+      hidden: !visible,
+    });
+  });
+
+  // 9. 라디오 그룹 인터페이스 검사
+  const radiogroups = Array.from(document.querySelectorAll('[role="radiogroup"]'));
+  radiogroups.forEach((radiogroup, index) => {
+    const radios = Array.from(radiogroup.querySelectorAll('[role="radio"]'));
+
+    let valid = 'pass';
+    const issues = [];
+
+    // radiogroup 내부에 radio가 없으면 fail
+    if (radios.length === 0) {
+      valid = 'fail';
+      issues.push('radiogroup 내부에 radio가 없음');
+    }
+
+    const visible =
+      radiogroup.offsetParent !== null &&
+      radiogroup.style.visibility !== 'hidden' &&
+      radiogroup.style.display !== 'none';
+
+    results.push({
+      element: radiogroup,
+      interface: 'radiogroup',
+      index: index + 1,
+      radios: radios.length,
+      valid,
+      issues,
+      hidden: !visible,
+    });
+  });
+
   return results;
 }
