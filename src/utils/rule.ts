@@ -781,52 +781,10 @@ export function checkWebApplication(): WebApplicationResult[] {
       issues.push('grid/table 내부에 row가 없음');
     }
 
-    // row가 있지만 cell이 없으면 fail
-    if (rows.length > 0 && cells.length === 0) {
+    // 모든 row에 cell이나 header가 하나도 없으면 fail
+    if (rows.length > 0 && cells.length === 0 && rowheaders.length === 0 && columnheaders.length === 0) {
       valid = 'fail';
-      issues.push('row가 있지만 cell이 없음');
-    }
-
-    // columnheader가 있지만 데이터 cell이 없으면 fail (전체 table에서)
-    if (columnheaders.length > 0 && cells.length === 0) {
-      valid = 'fail';
-      issues.push('columnheader가 있지만 데이터 cell이 없음');
-    }
-
-    // 각 row를 개별적으로 검사하여 cell이 없는 row가 있는지 확인
-    // 단, columnheader나 rowheader가 있는 row는 제외
-    rows.forEach((row, rowIndex) => {
-      const rowCells = Array.from(row.querySelectorAll('[role="cell"]'));
-      const rowHeaders = Array.from(row.querySelectorAll('[role="columnheader"], [role="rowheader"]'));
-      
-      // header가 없고 cell도 없는 row는 fail
-      if (rowHeaders.length === 0 && rowCells.length === 0) {
-        valid = 'fail';
-        issues.push(`${rowIndex + 1}번째 row에 cell이 없음`);
-      }
-    });
-
-    // 각 행의 열 수가 일치하는지 확인
-    const rowCellCounts: number[] = [];
-    rows.forEach((row) => {
-      const rowCells = Array.from(row.querySelectorAll('[role="cell"]'));
-      const rowHeaders = Array.from(row.querySelectorAll('[role="columnheader"], [role="rowheader"]'));
-      
-      // header가 있는 row는 cell 수에 포함하지 않음
-      if (rowHeaders.length === 0) {
-        rowCellCounts.push(rowCells.length);
-      }
-    });
-
-    // cell이 있는 row들 중에서 열 수가 다른 경우가 있는지 확인
-    if (rowCellCounts.length > 1) {
-      const firstCount = rowCellCounts[0];
-      const hasInconsistentColumns = rowCellCounts.some(count => count !== firstCount);
-      
-      if (hasInconsistentColumns) {
-        valid = 'fail';
-        issues.push('각 행의 열 수가 일치하지 않음');
-      }
+      issues.push('모든 row에 cell이나 header가 없음');
     }
 
     const visible =

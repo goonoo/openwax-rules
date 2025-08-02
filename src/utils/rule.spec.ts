@@ -913,7 +913,7 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
       expect(gridResult?.issues).toContain('grid/table 내부에 row가 없음');
     });
 
-    it('row가 있지만 cell이 없으면 fail', () => {
+    it('모든 row에 cell이나 header가 없으면 fail', () => {
       document.body.innerHTML = `
         <div role="grid">
           <div role="row">
@@ -924,7 +924,7 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
       const results = checkWebApplication();
       const gridResult = results.find((r) => r.interface === 'grid');
       expect(gridResult?.valid).toBe('fail');
-      expect(gridResult?.issues).toContain('row가 있지만 cell이 없음');
+      expect(gridResult?.issues).toContain('모든 row에 cell이나 header가 없음');
     });
 
     it('grid가 올바르게 구성되면 pass', () => {
@@ -961,6 +961,22 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
       const tableResult = results.find((r) => r.interface === 'table');
       expect(tableResult?.valid).toBe('pass');
       expect(tableResult?.rowheaders).toBe(1);
+    });
+
+    it('헤더만 있는 grid도 유효한 구조로 pass', () => {
+      document.body.innerHTML = `
+        <div role="grid">
+          <div role="row">
+            <div role="columnheader">이름</div>
+            <div role="columnheader">이메일</div>
+          </div>
+        </div>
+      `;
+      const results = checkWebApplication();
+      const gridResult = results.find((r) => r.interface === 'grid');
+      expect(gridResult?.valid).toBe('pass');
+      expect(gridResult?.columnheaders).toBe(2);
+      expect(gridResult?.cells).toBe(0);
     });
   });
 
