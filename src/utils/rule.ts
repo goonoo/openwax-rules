@@ -11,6 +11,27 @@ export function checkImages() {
   );
   const baseUrl = window.location.href;
 
+  // 무의미한 alt 텍스트 패턴
+  const meaninglessAltPatterns = [
+    /^image$/i,
+    /^img$/i,
+    /^picture$/i,
+    /^photo$/i,
+    /^그림$/i,
+    /^이미지$/i,
+    /^사진$/i,
+    /^icon$/i,
+    /^아이콘$/i,
+    /^banner$/i,
+    /^배너$/i,
+    /^logo$/i,
+    /^로고$/i,
+    /^untitled$/i,
+    /^제목없음$/i,
+    /^\d+\.(jpg|jpeg|png|gif|webp)$/i,
+    /^[a-z0-9_-]+\.(jpg|jpeg|png|gif|webp)$/i,
+  ];
+
   return images.map((img) => {
     const src = img.getAttribute('src') || '';
     let absoluteSrc = '';
@@ -25,19 +46,68 @@ export function checkImages() {
       img.offsetParent !== null &&
       style.visibility !== 'hidden' &&
       style.display !== 'none';
-    const valid =
-      img.getAttribute('alt') === ''
-        ? 'warning'
-        : img.getAttribute('alt') === null
-          ? 'fail'
-          : 'pass';
+
+    const alt = img.getAttribute('alt');
+    const longdesc = img.getAttribute('longdesc');
+
+    // 이미지 용도 분류
+    const isInteractive = !!(
+      img.closest('a, button, [role="button"]') ||
+      img.hasAttribute('onclick') ||
+      img.style.cursor === 'pointer'
+    );
+
+    const isDecorative = !!(
+      img.getAttribute('role') === 'presentation' ||
+      img.getAttribute('role') === 'none'
+    );
+
+    const hasMeaninglessAlt = alt && meaninglessAltPatterns.some(pattern => pattern.test(alt.trim()));
+
+    // 검증 로직
+    let valid: 'pass' | 'warning' | 'fail' = 'pass';
+    const issues: string[] = [];
+
+    if (alt === null) {
+      // alt 속성이 없음
+      valid = 'fail';
+      issues.push('alt 속성이 없음');
+    } else if (isInteractive) {
+      // 상호작용 이미지는 엄격한 검증
+      if (alt === '') {
+        valid = 'fail';
+        issues.push('상호작용 이미지의 alt가 비어있음');
+      } else if (hasMeaninglessAlt) {
+        valid = 'fail';
+        issues.push('상호작용 이미지의 alt가 무의미함');
+      }
+    } else if (isDecorative) {
+      // 명시적으로 장식적으로 표시된 이미지
+      if (alt !== '') {
+        valid = 'warning';
+        issues.push('장식적 이미지에 불필요한 alt 텍스트');
+      }
+    } else if (alt === '') {
+      // 일반 이미지에서 빈 alt는 기존 로직 유지 (warning)
+      valid = 'warning';
+      issues.push('alt가 비어있음 - 장식적이라면 role="presentation" 추가, 의미가 있다면 적절한 대체 텍스트 필요');
+    } else if (hasMeaninglessAlt) {
+      // 무의미한 alt 텍스트
+      valid = 'warning';
+      issues.push('무의미한 alt 텍스트 - 이미지의 목적과 내용을 설명하는 텍스트 필요');
+    }
+
     return {
       element: img,
       hidden: !visible,
       src: absoluteSrc,
-      alt: img.getAttribute('alt'),
-      longdesc: img.getAttribute('longdesc'),
+      alt,
+      longdesc,
       valid,
+      issues,
+      isInteractive,
+      isDecorative,
+      hasMeaninglessAlt,
     };
   });
 }

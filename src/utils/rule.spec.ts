@@ -106,6 +106,142 @@ describe('5.1.1 적절한 대체 텍스트 제공 (img) 검사: checkImages', ()
     expect(results[1].src.startsWith('http')).toBe(true);
     expect(results[2].src).toBe('http://localhost/'); // jsdom에서는 src가 빈 값이 아니라 http://localhost/ 로 반환된다
   });
+
+  it('checkImages: 상호작용 이미지 검증 - 링크 안의 이미지', () => {
+    document.body.innerHTML = `
+      <a href="/page1"><img src="link1.jpg" alt="페이지 링크" /></a>
+      <a href="/page2"><img src="link2.jpg" alt="" /></a>
+      <a href="/page3"><img src="link3.jpg" /></a>
+      <a href="/page4"><img src="link4.jpg" alt="image" /></a>
+    `;
+    const results = checkImages();
+    expect(results[0].isInteractive).toBe(true);
+    expect(results[0].valid).toBe('pass');
+    expect(results[1].isInteractive).toBe(true);
+    expect(results[1].valid).toBe('fail');
+    expect(results[1].issues).toContain('상호작용 이미지의 alt가 비어있음');
+    expect(results[2].isInteractive).toBe(true);
+    expect(results[2].valid).toBe('fail');
+    expect(results[2].issues).toContain('alt 속성이 없음');
+    expect(results[3].isInteractive).toBe(true);
+    expect(results[3].valid).toBe('fail');
+    expect(results[3].issues).toContain('상호작용 이미지의 alt가 무의미함');
+  });
+
+  it('checkImages: 상호작용 이미지 검증 - 버튼 안의 이미지', () => {
+    document.body.innerHTML = `
+      <button><img src="btn1.jpg" alt="확인" /></button>
+      <div role="button"><img src="btn2.jpg" alt="" /></div>
+      <img src="btn3.jpg" alt="클릭" onclick="handleClick()" />
+    `;
+    const results = checkImages();
+    expect(results[0].isInteractive).toBe(true);
+    expect(results[0].valid).toBe('pass');
+    expect(results[1].isInteractive).toBe(true);
+    expect(results[1].valid).toBe('fail');
+    expect(results[2].isInteractive).toBe(true);
+    expect(results[2].valid).toBe('pass');
+  });
+
+  it('checkImages: 장식적 이미지 검증', () => {
+    document.body.innerHTML = `
+      <img src="deco1.jpg" alt="" />
+      <img src="deco2.jpg" role="presentation" alt="장식" />
+      <img src="deco3.jpg" role="none" alt="" />
+      <img src="deco4.jpg" role="presentation" alt="" />
+    `;
+    const results = checkImages();
+    // 첫 번째는 단순 빈 alt이므로 명시적 장식 아님
+    expect(results[0].isDecorative).toBe(false);
+    expect(results[0].valid).toBe('warning');
+    // role="presentation"이면 장식적
+    expect(results[1].isDecorative).toBe(true);
+    expect(results[1].valid).toBe('warning');
+    expect(results[1].issues).toContain('장식적 이미지에 불필요한 alt 텍스트');
+    // role="none"이면 장식적
+    expect(results[2].isDecorative).toBe(true);
+    expect(results[2].valid).toBe('pass');
+    // role="presentation" + 빈 alt면 올바른 장식적
+    expect(results[3].isDecorative).toBe(true);
+    expect(results[3].valid).toBe('pass');
+  });
+
+  it('checkImages: 무의미한 alt 텍스트 검증', () => {
+    document.body.innerHTML = `
+      <img src="img1.jpg" alt="image" />
+      <img src="img2.jpg" alt="그림" />
+      <img src="img3.jpg" alt="icon" />
+      <img src="img4.jpg" alt="banner" />
+      <img src="img5.jpg" alt="logo" />
+      <img src="img6.jpg" alt="123.jpg" />
+      <img src="img7.jpg" alt="image_001.png" />
+      <img src="img8.jpg" alt="의미있는 설명" />
+    `;
+    const results = checkImages();
+    expect(results[0].hasMeaninglessAlt).toBe(true);
+    expect(results[0].valid).toBe('warning');
+    expect(results[1].hasMeaninglessAlt).toBe(true);
+    expect(results[1].valid).toBe('warning');
+    expect(results[2].hasMeaninglessAlt).toBe(true);
+    expect(results[2].valid).toBe('warning');
+    expect(results[3].hasMeaninglessAlt).toBe(true);
+    expect(results[3].valid).toBe('warning');
+    expect(results[4].hasMeaninglessAlt).toBe(true);
+    expect(results[4].valid).toBe('warning');
+    expect(results[5].hasMeaninglessAlt).toBe(true);
+    expect(results[5].valid).toBe('warning');
+    expect(results[6].hasMeaninglessAlt).toBe(true);
+    expect(results[6].valid).toBe('warning');
+    expect(results[7].hasMeaninglessAlt).toBe(false);
+    expect(results[7].valid).toBe('pass');
+  });
+
+  it('checkImages: 콘텐츠 이미지 검증', () => {
+    document.body.innerHTML = `
+      <img src="content1.jpg" alt="" />
+      <img src="content2.jpg" alt="의미있는 설명" />
+      <img src="content3.jpg" alt="photo" />
+    `;
+    const results = checkImages();
+    expect(results[0].isInteractive).toBe(false);
+    expect(results[0].isDecorative).toBe(false); // 명시적 role 없으면 장식적 아님
+    expect(results[0].valid).toBe('warning'); // 빈 alt는 warning
+    expect(results[1].isInteractive).toBe(false);
+    expect(results[1].isDecorative).toBe(false);
+    expect(results[1].valid).toBe('pass');
+    expect(results[2].isInteractive).toBe(false);
+    expect(results[2].isDecorative).toBe(false);
+    expect(results[2].hasMeaninglessAlt).toBe(true);
+    expect(results[2].valid).toBe('warning');
+    expect(results[2].issues).toContain('무의미한 alt 텍스트 - 이미지의 목적과 내용을 설명하는 텍스트 필요');
+  });
+
+  it('checkImages: 복합 시나리오 검증', () => {
+    document.body.innerHTML = `
+      <a href="/home"><img src="nav1.jpg" alt="" /></a>
+      <a href="/about"><img src="nav2.jpg" alt="회사소개" /></a>
+      <div><img src="content1.jpg" alt="" /></div>
+      <div><img src="content2.jpg" alt="차트 데이터" /></div>
+      <button><img src="btn1.jpg" alt="icon" /></button>
+    `;
+    const results = checkImages();
+    // 링크 안의 빈 alt 이미지
+    expect(results[0].isInteractive).toBe(true);
+    expect(results[0].valid).toBe('fail');
+    // 링크 안의 적절한 alt 이미지
+    expect(results[1].isInteractive).toBe(true);
+    expect(results[1].valid).toBe('pass');
+    // 일반 div 안의 빈 alt 이미지 (warning)
+    expect(results[2].isDecorative).toBe(false);
+    expect(results[2].valid).toBe('warning');
+    // 일반 div 안의 의미있는 alt 이미지
+    expect(results[3].isDecorative).toBe(false);
+    expect(results[3].valid).toBe('pass');
+    // 버튼 안의 무의미한 alt 이미지
+    expect(results[4].isInteractive).toBe(true);
+    expect(results[4].hasMeaninglessAlt).toBe(true);
+    expect(results[4].valid).toBe('fail');
+  });
 });
 
 describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', () => {
