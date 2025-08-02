@@ -823,7 +823,7 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
   });
 
   describe('콤보 박스 인터페이스 검사', () => {
-    it('combobox 내부에 listbox가 없으면 fail', () => {
+    it('combobox와 연결된 listbox가 없으면 fail', () => {
       document.body.innerHTML = `
         <div role="combobox">
           <input type="text" />
@@ -833,7 +833,7 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
       const comboboxResult = results.find((r) => r.interface === 'combobox');
       expect(comboboxResult?.valid).toBe('fail');
       expect(comboboxResult?.issues).toContain(
-        'combobox 내부에 listbox가 없음',
+        'combobox와 연결된 listbox가 없음',
       );
     });
 
@@ -869,6 +869,34 @@ describe('8.2.1 웹 애플리케이션 접근성 준수: checkWebApplication', (
       expect(comboboxResult?.valid).toBe('pass');
       expect(comboboxResult?.hasListbox).toBe(true);
       expect(comboboxResult?.options).toBe(2);
+    });
+
+    it('aria-controls로 외부 listbox와 연결된 combobox는 pass', () => {
+      document.body.innerHTML = `
+        <input role="combobox" aria-controls="listbox1" />
+        <ul id="listbox1" role="listbox">
+          <li role="option">옵션1</li>
+          <li role="option">옵션2</li>
+        </ul>
+      `;
+      const results = checkWebApplication();
+      const comboboxResult = results.find((r) => r.interface === 'combobox');
+      expect(comboboxResult?.valid).toBe('pass');
+      expect(comboboxResult?.hasListbox).toBe(true);
+      expect(comboboxResult?.options).toBe(2);
+    });
+
+    it('aria-controls가 listbox가 아닌 요소를 참조하면 fail', () => {
+      document.body.innerHTML = `
+        <input role="combobox" aria-controls="notlistbox" />
+        <div id="notlistbox">일반 요소</div>
+      `;
+      const results = checkWebApplication();
+      const comboboxResult = results.find((r) => r.interface === 'combobox');
+      expect(comboboxResult?.valid).toBe('fail');
+      expect(comboboxResult?.issues).toContain(
+        'combobox와 연결된 listbox가 없음',
+      );
     });
   });
 

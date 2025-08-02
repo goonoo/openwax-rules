@@ -711,16 +711,30 @@ export function checkWebApplication(): WebApplicationResult[] {
   // 3. 콤보 박스 인터페이스 검사
   const comboboxes = Array.from(document.querySelectorAll('[role="combobox"]'));
   comboboxes.forEach((combobox, index) => {
-    const listbox = combobox.querySelector('[role="listbox"]');
+    // 1. 먼저 내부에서 listbox 찾기
+    let listbox = combobox.querySelector('[role="listbox"]');
+    
+    // 2. 없으면 aria-controls로 외부에서 찾기
+    if (!listbox) {
+      const controls = combobox.getAttribute('aria-controls');
+      if (controls) {
+        listbox = document.getElementById(controls);
+        // listbox 역할인지 확인
+        if (listbox && listbox.getAttribute('role') !== 'listbox') {
+          listbox = null;
+        }
+      }
+    }
+    
     const options = listbox ? Array.from(listbox.querySelectorAll('[role="option"]')) : [];
 
     let valid = 'pass';
     const issues = [];
 
-    // combobox 내부에 listbox가 없으면 fail
+    // combobox와 연결된 listbox가 없으면 fail
     if (!listbox) {
       valid = 'fail';
-      issues.push('combobox 내부에 listbox가 없음');
+      issues.push('combobox와 연결된 listbox가 없음');
     }
 
     // listbox가 있지만 option이 없으면 fail
