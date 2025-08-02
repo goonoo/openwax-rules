@@ -65,18 +65,45 @@ export function checkBgImages() {
       } catch {
         absoluteSrc = src;
       }
+      
       const visible =
         el.offsetParent !== null &&
         style.visibility !== 'hidden' &&
         style.display !== 'none';
-      const valid = 'unknown';
+      
+      // 대체 텍스트 확인
+      const hasAltText = !!(el.getAttribute('aria-label') || el.getAttribute('title'));
+      
+      // 상호작용 요소인지 확인
+      const isInteractive = !!(
+        el.closest('button, a, [role="button"]') || 
+        el.hasAttribute('tabindex') ||
+        el.getAttribute('role') === 'button'
+      );
+      
+      let valid: 'pass' | 'warning' | 'fail';
+      const issues: string[] = [];
+      
+      if (isInteractive && !hasAltText) {
+        // 상호작용 요소는 더 엄격하게
+        valid = 'fail';
+        issues.push('상호작용 요소의 배경 이미지에 대체 텍스트가 없음');
+      } else if (!hasAltText) {
+        // 일반적인 경우는 경고로
+        valid = 'warning';  
+        issues.push('배경 이미지에 대체 텍스트가 없음 - 의미가 있다면 aria-label 또는 title 추가');
+      } else {
+        valid = 'pass';
+      }
 
       return {
         element: el,
         hidden: !visible,
         src: absoluteSrc,
-        alt: el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '',
+        alt: el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent?.trim() || '',
         valid,
+        issues,
+        isInteractive,
       };
     });
 }

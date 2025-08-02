@@ -207,8 +207,85 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
     });
     const results = checkBgImages();
     expect(results[0].alt).toBe('라벨');
+    expect(results[0].valid).toBe('pass');
     expect(results[1].alt).toBe('타이틀');
+    expect(results[1].valid).toBe('pass');
     expect(results[2].alt).toBe('');
+    expect(results[2].valid).toBe('warning');
+    (window.getComputedStyle as jest.Mock).mockRestore?.();
+  });
+
+  it('checkBgImages: 상호작용 요소의 배경 이미지는 더 엄격하게 검증', () => {
+    document.body.innerHTML = `
+      <button id="bg1" style="background-image: url('btn.jpg')">버튼</button>
+      <a id="bg2" href="#" style="background-image: url('link.jpg')">링크</a>
+      <div id="bg3" role="button" style="background-image: url('div-btn.jpg')">DIV 버튼</div>
+      <div id="bg4" tabindex="0" style="background-image: url('focusable.jpg')">포커스 가능</div>
+    `;
+    ['bg1', 'bg2', 'bg3', 'bg4'].forEach(id => {
+      Object.defineProperty(document.getElementById(id), 'offsetParent', {
+        value: document.body,
+        configurable: true,
+      });
+    });
+    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+      const id = (el as Element).id;
+      if (['bg1', 'bg2', 'bg3', 'bg4'].includes(id)) {
+        return {
+          backgroundImage: 'url("test.jpg")',
+          display: 'block',
+          visibility: 'visible',
+        } as any;
+      }
+      return {
+        backgroundImage: 'none',
+        display: 'block',
+        visibility: 'visible',
+      } as any;
+    });
+    const results = checkBgImages();
+    expect(results).toHaveLength(4);
+    results.forEach(result => {
+      expect(result.valid).toBe('fail');
+      expect(result.isInteractive).toBe(true);
+      expect(result.issues).toContain('상호작용 요소의 배경 이미지에 대체 텍스트가 없음');
+    });
+    (window.getComputedStyle as jest.Mock).mockRestore?.();
+  });
+
+  it('checkBgImages: 상호작용 요소에 대체 텍스트가 있으면 pass', () => {
+    document.body.innerHTML = `
+      <button id="bg1" style="background-image: url('btn.jpg')" aria-label="메뉴">버튼</button>
+      <a id="bg2" href="#" style="background-image: url('link.jpg')" title="홈으로">링크</a>
+    `;
+    ['bg1', 'bg2'].forEach(id => {
+      Object.defineProperty(document.getElementById(id), 'offsetParent', {
+        value: document.body,
+        configurable: true,
+      });
+    });
+    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+      const id = (el as Element).id;
+      if (['bg1', 'bg2'].includes(id)) {
+        return {
+          backgroundImage: 'url("test.jpg")',
+          display: 'block',
+          visibility: 'visible',
+        } as any;
+      }
+      return {
+        backgroundImage: 'none',
+        display: 'block',
+        visibility: 'visible',
+      } as any;
+    });
+    const results = checkBgImages();
+    expect(results).toHaveLength(2);
+    results.forEach(result => {
+      expect(result.valid).toBe('pass');
+      expect(result.isInteractive).toBe(true);
+      expect(result.issues).toHaveLength(0);
+    });
     (window.getComputedStyle as jest.Mock).mockRestore?.();
   });
 
