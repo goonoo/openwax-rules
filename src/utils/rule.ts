@@ -471,9 +471,6 @@ export function checkTables() {
       } else if (!hasAnyLabel && hasTh) {
         valid = 'warning';
         issues.push('표 라벨 추가 권장 (caption, aria-label, aria-labelledby)');
-      } else if (!hasAnyLabel && !hasTh) {
-        valid = 'fail';
-        issues.push('데이터 테이블이라면 th와 라벨 모두 필요');
       }
       
       // colspan/rowspan 관련 권장사항 추가
@@ -1148,7 +1145,7 @@ export interface WebApplicationResult {
   index: number;
   valid: 'pass' | 'fail' | 'warning';
   issues: string[];
-  [key: string]: any; // 추가 속성들을 위한 인덱스 시그니처
+  [key: string]: unknown; // 추가 속성들을 위한 인덱스 시그니처
 }
 
 export function checkWebApplication(): WebApplicationResult[] {

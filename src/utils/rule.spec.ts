@@ -383,31 +383,31 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
       configurable: true,
     });
     // getComputedStyle mock
-    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+    (jest.spyOn(window, 'getComputedStyle') as jest.MockedFunction<typeof window.getComputedStyle>).mockImplementation((el) => {
       const id = el.id;
       if (id === 'bg1')
         return {
           backgroundImage: "url('a.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg2')
         return {
           backgroundImage: 'none',
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg3')
         return {
           backgroundImage: "url('b.png')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       return {
         backgroundImage: 'none',
         display: 'block',
         visibility: 'visible',
-      } as any;
+      } as CSSStyleDeclaration;
     });
     const results = checkBgImages();
     expect(results.length).toBe(2);
@@ -434,31 +434,31 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
       value: document.body,
       configurable: true,
     });
-    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+    (jest.spyOn(window, 'getComputedStyle') as jest.MockedFunction<typeof window.getComputedStyle>).mockImplementation((el) => {
       const id = el.id;
       if (id === 'bg1')
         return {
           backgroundImage: "url('a.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg2')
         return {
           backgroundImage: "url('b.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg3')
         return {
           backgroundImage: "url('c.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       return {
         backgroundImage: 'none',
         display: 'block',
         visibility: 'visible',
-      } as any;
+      } as CSSStyleDeclaration;
     });
     const results = checkBgImages();
     expect(results[0].alt).toBe('라벨');
@@ -483,20 +483,20 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
         configurable: true,
       });
     });
-    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+    (jest.spyOn(window, 'getComputedStyle') as jest.MockedFunction<typeof window.getComputedStyle>).mockImplementation((el) => {
       const id = (el as Element).id;
       if (['bg1', 'bg2', 'bg3', 'bg4'].includes(id)) {
         return {
           backgroundImage: 'url("test.jpg")',
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       }
       return {
         backgroundImage: 'none',
         display: 'block',
         visibility: 'visible',
-      } as any;
+      } as CSSStyleDeclaration;
     });
     const results = checkBgImages();
     expect(results).toHaveLength(4);
@@ -519,20 +519,20 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
         configurable: true,
       });
     });
-    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+    (jest.spyOn(window, 'getComputedStyle') as jest.MockedFunction<typeof window.getComputedStyle>).mockImplementation((el) => {
       const id = (el as Element).id;
       if (['bg1', 'bg2'].includes(id)) {
         return {
           backgroundImage: 'url("test.jpg")',
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       }
       return {
         backgroundImage: 'none',
         display: 'block',
         visibility: 'visible',
-      } as any;
+      } as CSSStyleDeclaration;
     });
     const results = checkBgImages();
     expect(results).toHaveLength(2);
@@ -562,31 +562,31 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
       value: document.body,
       configurable: true,
     });
-    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+    (jest.spyOn(window, 'getComputedStyle') as jest.MockedFunction<typeof window.getComputedStyle>).mockImplementation((el) => {
       const id = el.id;
       if (id === 'bg1')
         return {
           backgroundImage: "url('a.jpg')",
           display: 'none',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg2')
         return {
           backgroundImage: "url('b.jpg')",
           display: 'block',
           visibility: 'hidden',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg3')
         return {
           backgroundImage: "url('c.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       return {
         backgroundImage: 'none',
         display: 'block',
         visibility: 'visible',
-      } as any;
+      } as CSSStyleDeclaration;
     });
     const results = checkBgImages();
     expect(results[0].hidden).toBe(true);
@@ -613,31 +613,31 @@ describe('5.1.1 적절한 대체 텍스트 제공 (bg) 검사: checkBgImages', (
       value: document.body,
       configurable: true,
     });
-    jest.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+    (jest.spyOn(window, 'getComputedStyle') as jest.MockedFunction<typeof window.getComputedStyle>).mockImplementation((el) => {
       const id = el.id;
       if (id === 'bg1')
         return {
           backgroundImage: "url('/a.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg2')
         return {
           backgroundImage: "url('b.jpg')",
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       if (id === 'bg3')
         return {
           backgroundImage: 'url()',
           display: 'block',
           visibility: 'visible',
-        } as any;
+        } as CSSStyleDeclaration;
       return {
         backgroundImage: 'none',
         display: 'block',
         visibility: 'visible',
-      } as any;
+      } as CSSStyleDeclaration;
     });
     const results = checkBgImages();
     expect(results[0].src.startsWith('http')).toBe(true);
