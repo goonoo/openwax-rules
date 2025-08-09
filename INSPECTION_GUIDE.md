@@ -152,36 +152,164 @@ const hasScopeTh = allCells.some(cell =>
 
 ## 6.1.2 초점 이동과 표시
 
-### checkFocus() - 키보드 초점 검사
+### checkFocus() - 키보드 접근성 종합 검사
 
-**KWCAG 2.2 기준**: 키보드로 접근 가능한 모든 요소는 초점이 명확하게 표시되어야 한다.
+**KWCAG 2.2 기준**: 키보드로 접근 가능한 모든 요소는 초점이 명확하게 표시되어야 하며, 논리적인 탭 순서와 키보드 트랩 방지가 보장되어야 한다.
 
 #### 검사 대상
-문제가 있는 요소만 반환 (일반적으로 빈 배열)
+포커스 가능한 요소 (button, input, a[href], [tabindex], 등)와 모달/다이얼로그 인터페이스
+
+#### 반환 구조 (확장됨)
+```typescript
+{
+  focusIssues: Array<FocusIssue>,      // 개별 요소 문제
+  tabindexAnalysis: TabindexAnalysis,   // tabindex 패턴 분석
+  keyboardTraps: Array<KeyboardTrap>,   // 키보드 트랩 감지
+  focusOrderAnalysis: FocusOrderInfo,   // 포커스 순서 분석
+  summary: {                            // 전체 요약
+    totalIssues: number,
+    failureCount: number,
+    warningCount: number,
+    hasKeyboardTraps: boolean,
+    hasTabindexIssues: boolean
+  }
+}
+```
 
 #### 검사 로직
+
+##### 1. 기본 포커스 문제 감지
 ```typescript
-// 1. blur() 이벤트 감지
+// blur() 이벤트 감지 (키보드 사용자 차단)
 const hasBlurEvent = 
   (onfocus && onfocus.includes('blur()')) ||
   (onclick && onclick.includes('blur()'));
 
-// 2. outline 제거 감지
+// outline 제거 감지
 const hasOutlineZero = 
   outlineWidth === '0px' || outlineWidth === '0' ||
   cssText.includes('outline: none') ||
   cssText.includes('outline: 0');
 ```
 
-#### 판정 기준
-- **blur() 이벤트 사용**: ❌ fail
-- **outline 제거**: ❌ fail
-- **정상**: 결과에 미포함 (빈 배열)
+##### 2. tabindex 패턴 분석 (NEW)
+```typescript
+// 양수 tabindex 감지 (안티패턴)
+if (tabindexNum > 0) {
+  issues.push('양수 tabindex로 인한 탭 순서 문제');
+}
 
-#### 개선 방안
-- `blur()` 이벤트 제거
-- `outline: none` 대신 커스텀 포커스 스타일 제공
-- `:focus-visible` 활용 권장
+// 불필요한 tabindex="0" 감지
+const isNaturallyFocusable = element.matches(
+  'a[href], button, input, select, textarea'
+);
+if (tabindexValue === '0' && isNaturallyFocusable) {
+  issues.push('불필요한 tabindex="0"');
+}
+
+// 유효하지 않은 tabindex 값
+if (isNaN(tabindexNum) || !tabindexValue.match(/^-?\d+$/)) {
+  issues.push(`유효하지 않은 tabindex: ${tabindexValue}`);
+}
+```
+
+##### 3. 키보드 트랩 감지 (NEW)
+```typescript
+// 모달/다이얼로그 요소 검사
+const modalElements = document.querySelectorAll(
+  '[role="dialog"], [role="alertdialog"], .modal, [aria-modal="true"]'
+);
+
+// 키보드 트랩 조건
+const hasCloseButton = modal.querySelector(
+  '[aria-label*="닫기"], [aria-label*="close"], .close'
+);
+const hasEscapeHandler = modal.hasAttribute('data-keyboard') ||
+  modal.getAttribute('onkeydown')?.includes('Escape');
+
+if (!hasCloseButton && !hasEscapeHandler) {
+  // 키보드 트랩으로 감지
+}
+```
+
+##### 4. 포커스 순서 분석 (NEW)
+```typescript
+// 양수 tabindex 사용 시 순서 문제 경고
+const hasPositiveTabindex = elements.some(el => 
+  parseInt(el.getAttribute('tabindex') || '0') > 0
+);
+
+if (hasPositiveTabindex) {
+  orderIssues.push('양수 tabindex로 인한 비논리적 탭 순서 가능성');
+}
+```
+
+#### 판정 기준 (확장됨)
+
+##### 개별 요소 판정
+| 문제 유형 | 판정 | 비고 |
+|-----------|------|------|
+| **blur() 이벤트** | ❌ fail | 키보드 사용자 완전 차단 |
+| **outline 제거** | ⚠️ warning | 포커스 표시 부족 |
+| **양수 tabindex** | ⚠️ warning | 탭 순서 문제 가능성 |
+| **잘못된 tabindex** | ⚠️ warning | 구문 오류 |
+
+##### 전역 분석 판정
+- **키보드 트랩 감지**: 모달에 ESC/닫기 없음 → 접근성 위험
+- **tabindex 패턴 문제**: 양수 값, 불필요한 사용 → 사용성 저해
+- **포커스 순서 문제**: 비논리적 탭 순서 → 탐색 혼란
+
+#### 개선 방안 (확장됨)
+
+##### 기본 포커스 관리
+- `blur()` 이벤트 **완전 제거** 필수
+- `outline: none` 대신 **커스텀 포커스 스타일** 제공
+- `:focus-visible` 사용으로 **마우스/키보드 구분**
+
+```css
+/* Good - 커스텀 포커스 스타일 */
+button:focus-visible {
+  outline: 3px solid #4A90E2;
+  outline-offset: 2px;
+}
+
+/* Better - 브랜드에 맞는 포커스 */
+.custom-focus:focus-visible {
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.5);
+  border-color: #4A90E2;
+}
+```
+
+##### tabindex 사용 원칙
+- **양수 tabindex 금지**: 자연스러운 DOM 순서 유지
+- **tabindex="-1"**: 프로그래밍 방식 포커스만
+- **tabindex="0"**: 커스텀 컴포넌트에만 제한적 사용
+
+```html
+<!-- Good -->
+<div tabindex="-1" id="skip-target">본문</div>
+<custom-widget tabindex="0" role="button">커스텀 버튼</custom-widget>
+
+<!-- Bad -->
+<button tabindex="1">첫 번째</button> <!-- 양수 금지 -->
+<button tabindex="0">기본 버튼</button> <!-- 불필요 -->
+```
+
+##### 키보드 트랩 방지
+```html
+<!-- Good - 완전한 모달 -->
+<div role="dialog" aria-labelledby="title" aria-modal="true">
+  <h2 id="title">제목</h2>
+  <p>내용</p>
+  <button onclick="closeModal()" aria-label="닫기">×</button>
+  <!-- 또는 onkeydown="if(event.key==='Escape') closeModal()" -->
+</div>
+```
+
+##### 포커스 순서 최적화
+- **DOM 순서 = 탭 순서**: 논리적 흐름 유지
+- **스크린 리더 호환**: 시각적 순서와 일치
+- **반응형 고려**: 레이아웃 변경 시에도 논리적 순서
 
 ---
 
@@ -584,37 +712,233 @@ const connectedTabpanels = tabs의 aria-controls로 연결된 tabpanel들;
 <input type="text" name="username" title="사용자명">
 ```
 
-### A4. 키보드 접근성 모범 사례
+### A4. 키보드 접근성 모범 사례 (확장됨)
 
-#### ✅ 올바른 예시
+#### ✅ 올바른 포커스 스타일
 ```html
-<!-- 커스텀 포커스 스타일 -->
+<!-- 현대적 포커스 관리 -->
 <style>
-.custom-button:focus {
+/* 기본 포커스 스타일 */
+.custom-button:focus-visible {
   outline: 3px solid #4A90E2;
   outline-offset: 2px;
 }
-/* 또는 */
-.modern-focus:focus-visible {
+
+/* 브랜드 맞춤 포커스 */
+.brand-focus:focus-visible {
   box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.5);
+  border-color: #4A90E2;
+}
+
+/* 다크 모드 대응 */
+@media (prefers-color-scheme: dark) {
+  .adaptive-focus:focus-visible {
+    outline-color: #87CEEB;
+  }
 }
 </style>
 
-<button class="custom-button">클릭 가능한 버튼</button>
-<a href="#main" class="modern-focus">본문으로 바로가기</a>
+<button class="custom-button">현대적 포커스</button>
+<a href="#main" class="brand-focus">브랜드 포커스</a>
+<input class="adaptive-focus" type="text" placeholder="적응형 포커스" />
 ```
 
-#### ❌ 잘못된 예시
+#### ✅ 올바른 tabindex 사용
 ```html
-<!-- 포커스 제거 (접근성 위반) -->
-<style>
-button:focus { outline: none; }
-a:focus { outline: 0; }
-</style>
+<!-- 스킵 링크 (tabindex="-1") -->
+<a href="#main-content" class="skip-link">본문으로 바로가기</a>
+<main id="main-content" tabindex="-1">
+  <!-- 프로그래밍 방식 포커스를 위한 tabindex="-1" -->
+  <h1>메인 콘텐츠</h1>
+</main>
 
-<!-- blur() 사용 (키보드 사용자 차단) -->
-<button onclick="this.blur()">버튼</button>
-<input onfocus="blur()">
+<!-- 커스텀 컴포넌트 (tabindex="0") -->
+<div role="button" tabindex="0" class="custom-widget"
+     onkeydown="if(event.key==='Enter'||event.key===' ') activate()">
+  커스텀 버튼
+</div>
+
+<!-- 자연스러운 DOM 순서 유지 -->
+<form>
+  <input type="text" placeholder="이름" />  <!-- tabindex 불필요 -->
+  <input type="email" placeholder="이메일" />
+  <button type="submit">제출</button>
+</form>
+```
+
+#### ✅ 키보드 트랩 방지
+```html
+<!-- 완전한 모달 구현 -->
+<div role="dialog" aria-labelledby="modal-title" aria-modal="true" 
+     onkeydown="handleModalKeydown(event)">
+  <div class="modal-content">
+    <h2 id="modal-title">확인 필요</h2>
+    <p>정말로 삭제하시겠습니까?</p>
+    
+    <div class="modal-actions">
+      <button onclick="confirmDelete()">확인</button>
+      <button onclick="closeModal()" aria-label="모달 닫기">취소</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function handleModalKeydown(event) {
+  // ESC 키로 모달 닫기
+  if (event.key === 'Escape') {
+    closeModal();
+  }
+  
+  // Tab 키 순환 (키보드 트랩 방지)
+  const focusableElements = modal.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  );
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+  
+  if (event.key === 'Tab') {
+    if (event.shiftKey) {
+      if (document.activeElement === firstElement) {
+        lastElement.focus();
+        event.preventDefault();
+      }
+    } else {
+      if (document.activeElement === lastElement) {
+        firstElement.focus();
+        event.preventDefault();
+      }
+    }
+  }
+}
+</script>
+```
+
+#### ❌ 잘못된 예시들
+
+##### 포커스 제거 (접근성 위반)
+```html
+<style>
+button:focus { outline: none; }     /* 키보드 사용자 배제 */
+a:focus { outline: 0; }             /* 포커스 표시 제거 */
+input:focus { outline-width: 0; }   /* 입력 필드 포커스 숨김 */
+</style>
+```
+
+##### blur() 사용 (키보드 사용자 차단)
+```html
+<button onclick="this.blur()">버튼</button>          <!-- 클릭 후 포커스 제거 -->
+<input onfocus="blur()" placeholder="포커스 불가">    <!-- 포커스 시도 시 즉시 제거 -->
+<a href="#" onfocus="this.blur()">링크</a>           <!-- 키보드 탐색 차단 -->
+```
+
+##### 잘못된 tabindex 사용
+```html
+<!-- 양수 tabindex (탭 순서 혼란) -->
+<button tabindex="1">첫 번째</button>
+<input tabindex="3" type="text" placeholder="세 번째" />
+<button tabindex="2">두 번째</button>
+<!-- 결과: 비논리적 탭 순서로 사용자 혼란 -->
+
+<!-- 불필요한 tabindex="0" -->
+<button tabindex="0">기본 버튼</button>    <!-- 원래 포커스 가능 -->
+<a href="#" tabindex="0">기본 링크</a>     <!-- 중복 tabindex -->
+
+<!-- 유효하지 않은 tabindex -->
+<div tabindex="abc">잘못된 값</div>
+<span tabindex="1.5">소수점</span>
+<p tabindex="true">불린 값</p>
+```
+
+##### 키보드 트랩 (탈출 불가)
+```html
+<!-- 닫기 방법 없는 모달 -->
+<div role="dialog" style="display: block;">
+  <h2>알림</h2>
+  <p>중요한 메시지입니다.</p>
+  <!-- 닫기 버튼 없음, ESC 키 지원 없음 -->
+</div>
+
+<!-- 무한 루프 포커스 -->
+<div onkeydown="event.preventDefault()">
+  <input type="text" />
+  <button>버튼</button>
+  <!-- 모든 키보드 이벤트 차단으로 탈출 불가 -->
+</div>
+```
+
+#### 🔍 checkFocus() 검사 결과 해석
+
+##### 정상적인 결과
+```javascript
+const result = checkFocus();
+console.log(result);
+// {
+//   focusIssues: [],                    // 문제 없음
+//   tabindexAnalysis: {
+//     positiveTabindex: [],
+//     unnecessaryTabindex: [],
+//     invalidTabindex: [],
+//     hasIssues: false
+//   },
+//   keyboardTraps: [],                  // 트랩 없음
+//   focusOrderAnalysis: {
+//     totalTabbableElements: 5,
+//     hasPositiveTabindex: false,
+//     orderIssues: []
+//   },
+//   summary: {
+//     totalIssues: 0,
+//     failureCount: 0,
+//     warningCount: 0,
+//     hasKeyboardTraps: false,
+//     hasTabindexIssues: false
+//   }
+// }
+```
+
+##### 문제가 있는 결과
+```javascript
+const result = checkFocus();
+console.log(result);
+// {
+//   focusIssues: [
+//     {
+//       tag: 'button',
+//       text: '버튼',
+//       issueType: 'blur()',
+//       valid: 'fail',
+//       issues: ['blur() 이벤트로 키보드 사용자 차단']
+//     },
+//     {
+//       tag: 'input',
+//       text: '',
+//       issueType: 'outline:0',
+//       valid: 'warning',  
+//       issues: ['포커스 표시 제거 - 커스텀 포커스 스타일 권장']
+//     }
+//   ],
+//   tabindexAnalysis: {
+//     positiveTabindex: [
+//       { element: div, value: 1, tag: 'div', text: '양수 tabindex' }
+//     ],
+//     hasIssues: true
+//   },
+//   keyboardTraps: [
+//     {
+//       element: dialog,
+//       role: 'dialog',
+//       focusableElements: 2,
+//       issues: ['닫기 버튼 없음', 'ESC 키 지원 없음']
+//     }
+//   ],
+//   summary: {
+//     totalIssues: 2,
+//     failureCount: 1,      // blur() 이벤트
+//     warningCount: 1,      // outline 제거
+//     hasKeyboardTraps: true,
+//     hasTabindexIssues: true
+//   }
+// }
 ```
 
 ### A5. ARIA 인터페이스 모범 사례
@@ -757,6 +1081,23 @@ a:focus { outline: 0; }
 
 ### Q4: ARIA 라벨과 일반 라벨의 차이는?
 **A**: ARIA 라벨(`aria-label`, `aria-labelledby`)은 보조 기술에서만 읽히고, 일반 라벨(`<label>`, `<caption>`)은 모든 사용자에게 표시됩니다. 상황에 따라 적절히 선택하세요.
+
+### Q5: tabindex="1", "2", "3" 같은 양수 값을 사용하면 안 되나요?
+**A**: 양수 tabindex는 자연스러운 DOM 순서를 깨뜨려 키보드 사용자에게 혼란을 줍니다. 대신 DOM 구조를 논리적으로 배치하고, 필요시 `tabindex="0"` (포커스 가능) 또는 `tabindex="-1"` (프로그래밍 방식 포커스만)을 사용하세요.
+
+### Q6: 모달에서 키보드 트랩을 완전히 방지하려면?
+**A**: 모달에는 반드시 (1) ESC 키로 닫기 또는 (2) 명확한 닫기 버튼이 있어야 합니다. 추가로 Tab 키 순환을 구현하여 모달 내부에서만 포커스가 이동하도록 하되, 사용자가 원할 때 언제든 탈출할 수 있어야 합니다.
+
+### Q7: checkFocus()가 반환하는 새로운 구조를 어떻게 활용하나요?
+**A**: 확장된 구조는 다음과 같이 활용할 수 있습니다:
+- `focusIssues`: 개별 요소별 문제 (blur, outline, tabindex 이슈)
+- `tabindexAnalysis`: 전체 페이지 tabindex 사용 패턴 분석
+- `keyboardTraps`: 키보드 트랩 위험 요소 감지
+- `summary`: 전체 키보드 접근성 현황 요약
+이를 통해 페이지 전반의 키보드 접근성을 체계적으로 개선할 수 있습니다.
+
+### Q8: 기존 checkFocus() 사용 코드와 호환되나요?
+**A**: 새로운 구조로 변경되었으므로 기존 코드는 수정이 필요합니다. 기존에는 배열이 반환되었지만, 이제는 객체에 `focusIssues` 배열이 포함됩니다. 예: `checkFocus()` → `checkFocus().focusIssues`
 
 ---
 
