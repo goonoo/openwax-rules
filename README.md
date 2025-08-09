@@ -1,4 +1,4 @@
-# OpenWax Rules
+# OpenWAX Rules
 
 한국형 웹 콘텐츠 접근성 지침(KWAG) 2.2를 기반으로 한 웹 접근성 검사 규칙 라이브러리입니다.
 
