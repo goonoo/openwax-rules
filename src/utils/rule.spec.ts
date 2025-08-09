@@ -553,15 +553,81 @@ describe('5.3.1 표의 구성 검사: checkTables', () => {
     const results = checkTables();
     expect(results[0].valid).toBe('warning');
   });
-  it('checkTables: caption, summary, scope 있는 th 모두 없으면 warning', () => {
+  it('checkTables: th가 없으면 fail', () => {
     document.body.innerHTML = `<table><thead><tr><td>데이터</td></tr></thead></table>`;
     const results = checkTables();
-    expect(results[0].valid).toBe('warning');
+    expect(results[0].valid).toBe('fail');
+    expect(results[0].issues).toContain('제목 셀(th)이 없음');
   });
-  it('checkTables: 그 외는 fail', () => {
+  it('checkTables: th는 있지만 라벨이 없으면 warning', () => {
     document.body.innerHTML = `<table><thead><tr><th>헤더</th></tr></thead></table>`;
     const results = checkTables();
-    expect(results[0].valid).toBe('fail');
+    expect(results[0].valid).toBe('warning');
+    expect(results[0].issues).toContain('표 라벨 추가 권장 (caption, aria-label, aria-labelledby)');
+  });
+
+  it('checkTables: aria-label이 있으면 라벨로 인식', () => {
+    document.body.innerHTML = `
+      <table aria-label="사용자 데이터">
+        <thead><tr><th scope="col">이름</th><th scope="col">나이</th></tr></thead>
+        <tbody><tr><td>김철수</td><td>25</td></tr></tbody>
+      </table>
+    `;
+    const results = checkTables();
+    expect(results[0].valid).toBe('pass');
+    expect(results[0].ariaLabel).toBe('사용자 데이터');
+    expect(results[0].tableLabel).toBe('사용자 데이터');
+    expect(results[0].hasAnyLabel).toBe(true);
+  });
+
+  it('checkTables: aria-labelledby가 최우선 라벨로 인식', () => {
+    document.body.innerHTML = `
+      <h2 id="table-title">월별 매출 현황</h2>
+      <table aria-labelledby="table-title" aria-label="다른 라벨">
+        <caption>표 캡션</caption>
+        <thead><tr><th scope="col">월</th><th scope="col">매출</th></tr></thead>
+      </table>
+    `;
+    const results = checkTables();
+    expect(results[0].valid).toBe('pass');
+    expect(results[0].ariaLabelledBy).toBe('table-title');
+    expect(results[0].tableLabel).toBe('월별 매출 현황');
+    expect(results[0].hasAnyLabel).toBe(true);
+  });
+
+  it('checkTables: aria-labelledby가 존재하지 않는 ID를 참조하면 다음 우선순위로 fallback', () => {
+    document.body.innerHTML = `
+      <table aria-labelledby="nonexistent" aria-label="실제 라벨">
+        <thead><tr><th scope="col">데이터</th></tr></thead>
+      </table>
+    `;
+    const results = checkTables();
+    expect(results[0].valid).toBe('pass');
+    expect(results[0].tableLabel).toBe('실제 라벨');
+  });
+
+  it('checkTables: 라벨 우선순위 테스트 (aria-labelledby > aria-label > caption > summary)', () => {
+    document.body.innerHTML = `
+      <table summary="요약" aria-label="ARIA 라벨">
+        <caption>캡션</caption>
+        <thead><tr><th>헤더</th></tr></thead>
+      </table>
+    `;
+    const results = checkTables();
+    expect(results[0].tableLabel).toBe('ARIA 라벨');
+    expect(results[0].caption).toBe('캡션');
+    expect(results[0].summary).toBe('요약');
+  });
+
+  it('checkTables: role="presentation"인 표에 라벨이 있으면 warning', () => {
+    document.body.innerHTML = `
+      <table role="presentation" aria-label="불필요한 라벨">
+        <tr><td>레이아웃 테이블</td></tr>
+      </table>
+    `;
+    const results = checkTables();
+    expect(results[0].valid).toBe('warning');
+    expect(results[0].issues).toContain('레이아웃 테이블에 불필요한 라벨이 있음');
   });
 });
 

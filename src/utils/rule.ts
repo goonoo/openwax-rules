@@ -185,10 +185,31 @@ export function checkTables() {
   return Array.from(document.querySelectorAll('table')).map((table) => {
     const caption = table.querySelector('caption')?.textContent?.trim() || '';
     const summary = table.getAttribute('summary') || '';
+    const ariaLabel = table.getAttribute('aria-label') || '';
+    const ariaLabelledBy = table.getAttribute('aria-labelledby') || '';
     const thead = table.querySelector('thead');
     const tfoot = table.querySelector('tfoot');
     const tbody = table.querySelector('tbody');
     const role = table.getAttribute('role');
+
+    // 표 라벨 우선순위: aria-labelledby > aria-label > caption > summary
+    function getTableLabel() {
+      if (ariaLabelledBy) {
+        const labelElement = document.getElementById(ariaLabelledBy);
+        const labelText = labelElement?.textContent?.trim();
+        if (labelText) {
+          return labelText;
+        }
+        // aria-labelledby가 참조하는 요소가 없거나 빈 텍스트면 다음 우선순위로
+      }
+      if (ariaLabel) {
+        return ariaLabel.trim();
+      }
+      if (caption) {
+        return caption;
+      }
+      return summary;
+    }
 
     function extractCells(section) {
       if (!section) return [];
@@ -203,12 +224,20 @@ export function checkTables() {
       });
     }
 
+    const tableLabel = getTableLabel();
+    const hasAnyLabel = !!(tableLabel);
+
     // valid 판정 로직
     let valid = 'fail';
+    const issues: string[] = [];
+    
     if (role === 'presentation') {
       valid = 'warning';
+      if (hasAnyLabel) {
+        issues.push('레이아웃 테이블에 불필요한 라벨이 있음');
+      }
     } else {
-      // thead, tbody, tfoot 전체에서 scope 있는 th가 하나라도 있고, caption이 있어야 pass
+      // thead, tbody, tfoot 전체에서 scope 있는 th가 하나라도 있고, 라벨이 있어야 pass
       const allCells = [
         extractCells(thead),
         extractCells(tbody),
@@ -218,20 +247,40 @@ export function checkTables() {
       const hasScopeTh = allCells.some(
         (cell) => cell.tag === 'th' && cell.scope,
       );
-      if (caption && hasScopeTh) {
+
+      if (!hasTh) {
+        valid = 'fail';
+        issues.push('제목 셀(th)이 없음');
+      } else if (hasAnyLabel && hasScopeTh) {
         valid = 'pass';
-      } else if (caption && hasTh) {
+      } else if (hasAnyLabel && hasTh) {
         valid = 'warning';
-      } else if (!caption && !summary && !hasTh) {
-        // caption이 없고, summary도 없고, scope 있는 th도 없으면 레이아웃 테이블로 간주하여 warning
+        issues.push('scope 속성 추가 권장');
+      } else if (!hasAnyLabel && hasTh) {
         valid = 'warning';
+        issues.push('표 라벨 추가 권장 (caption, aria-label, aria-labelledby)');
+      } else if (!hasAnyLabel && !hasTh) {
+        // 라벨도 없고 th도 없으면 레이아웃 테이블로 간주하여 warning
+        valid = 'warning';
+        issues.push('데이터 테이블이라면 th와 라벨 추가 필요');
       }
     }
 
+    const style = window.getComputedStyle(table);
+    const visible =
+      table.offsetParent !== null &&
+      style.visibility !== 'hidden' &&
+      style.display !== 'none';
+
     return {
       element: table,
+      hidden: !visible,
       caption,
       summary,
+      ariaLabel,
+      ariaLabelledBy,
+      tableLabel,
+      hasAnyLabel,
       thead: !!thead,
       tfoot: !!tfoot,
       tbody: !!tbody,
@@ -239,6 +288,7 @@ export function checkTables() {
       tfootCells: extractCells(tfoot),
       tbodyCells: extractCells(tbody),
       valid,
+      issues,
     };
   });
 }
