@@ -1033,57 +1033,45 @@ describe('6.1.2 초점 이동과 표시 검사: checkFocus', () => {
       <input type="text" onfocus="this.blur()" />
       <button>정상 버튼</button>
     `;
-    const results = checkFocus() as Array<{
-      tag: string;
-      text: string;
-      issueType: string;
-      valid: string;
-    }>;
-    expect(results.length).toBe(3); // blur() 이벤트가 있는 요소만
-    expect(results[0].issueType).toBe('blur()');
-    expect(results[0].valid).toBe('fail');
-    expect(results[1].issueType).toBe('blur()');
-    expect(results[1].valid).toBe('fail');
-    expect(results[2].issueType).toBe('blur()');
-    expect(results[2].valid).toBe('fail');
+    const result = checkFocus();
+    expect(result.focusIssues.length).toBe(3); // blur() 이벤트가 있는 요소만
+    expect(result.focusIssues[0].issueType).toBe('blur()');
+    expect(result.focusIssues[0].valid).toBe('fail');
+    expect(result.focusIssues[1].issueType).toBe('blur()');
+    expect(result.focusIssues[1].valid).toBe('fail');
+    expect(result.focusIssues[2].issueType).toBe('blur()');
+    expect(result.focusIssues[2].valid).toBe('fail');
+    expect(result.summary.failureCount).toBe(3);
   });
 
-  it('checkFocus: outline:0 스타일이 있는 요소는 fail을 반환한다', () => {
+  it('checkFocus: outline:0 스타일이 있는 요소는 warning을 반환한다', () => {
     document.body.innerHTML = `
       <button style="outline: none;">버튼1</button>
       <a href="#" style="outline: 0;">링크1</a>
       <input type="text" style="outline-width: 0;" />
       <button style="outline: 2px solid red;">정상 버튼</button>
     `;
-    const results = checkFocus() as Array<{
-      tag: string;
-      text: string;
-      issueType: string;
-      valid: string;
-    }>;
-    expect(results.length).toBe(3); // outline 제거된 요소만
-    expect(results[0].issueType).toBe('outline:0');
-    expect(results[0].valid).toBe('fail');
-    expect(results[1].issueType).toBe('outline:0');
-    expect(results[1].valid).toBe('fail');
-    expect(results[2].issueType).toBe('outline:0');
-    expect(results[2].valid).toBe('fail');
+    const result = checkFocus();
+    expect(result.focusIssues.length).toBe(3); // outline 제거된 요소만
+    expect(result.focusIssues[0].issueType).toBe('outline:0');
+    expect(result.focusIssues[0].valid).toBe('warning');
+    expect(result.focusIssues[1].issueType).toBe('outline:0');
+    expect(result.focusIssues[1].valid).toBe('warning');
+    expect(result.focusIssues[2].issueType).toBe('outline:0');
+    expect(result.focusIssues[2].valid).toBe('warning');
+    expect(result.summary.warningCount).toBe(3);
   });
 
   it('checkFocus: 숨겨진 요소는 검사하지 않는다', () => {
     document.body.innerHTML = `
       <button style="display: none;" onfocus="blur()">숨겨진 버튼</button>
-      <a href="#" style="visibility: hidden;" style="outline: none;">숨겨진 링크</a>
+      <a href="#" style="visibility: hidden; outline: none;">숨겨진 링크</a>
       <button onfocus="blur()">보이는 버튼</button>
     `;
-    const results = checkFocus() as Array<{
-      tag: string;
-      text: string;
-      issueType: string;
-      valid: string;
-    }>;
-    expect(results.length).toBe(1); // 보이는 요소만 검사
-    expect(results[0].text).toBe('보이는 버튼');
+    const result = checkFocus();
+    expect(result.focusIssues.length).toBe(1); // 보이는 요소만 검사
+    expect(result.focusIssues[0].text).toBe('보이는 버튼');
+    expect(result.summary.totalIssues).toBe(1);
   });
 
   it('checkFocus: 정상적인 요소는 결과에 포함되지 않는다', () => {
@@ -1093,28 +1081,92 @@ describe('6.1.2 초점 이동과 표시 검사: checkFocus', () => {
       <input type="text" />
       <select><option>옵션</option></select>
     `;
-    const results = checkFocus();
-    expect(results.length).toBe(0); // 문제가 없는 요소는 포함되지 않음
+    const result = checkFocus();
+    expect(result.focusIssues.length).toBe(0); // 문제가 없는 요소는 포함되지 않음
+    expect(result.summary.totalIssues).toBe(0);
   });
 
-  it('checkFocus: 문제가 있는 모든 요소가 결과에 포함된다', () => {
+  it('checkFocus: tabindex 패턴을 올바르게 검증한다', () => {
     document.body.innerHTML = `
-      <div onfocus="blur()">div는 포커스 불가</div>
-      <span style="outline: none;">span도 포커스 불가</span>
-      <button onfocus="blur()">포커스 가능한 버튼</button>
-      <a href="#" style="outline: none;">포커스 가능한 링크</a>
+      <div tabindex="1">양수 tabindex</div>
+      <button tabindex="0">불필요한 tabindex</button>
+      <div tabindex="invalid">잘못된 tabindex</div>
+      <div tabindex="-1">올바른 음수 tabindex</div>
+      <input type="text" tabindex="2" />
     `;
-    const results = checkFocus() as Array<{
-      tag: string;
-      text: string;
-      issueType: string;
-      valid: string;
-    }>;
-    expect(results.length).toBe(4); // 모든 문제가 있는 요소가 포함됨
-    expect(results.some((r) => r.tag === 'div')).toBe(true);
-    expect(results.some((r) => r.tag === 'span')).toBe(true);
-    expect(results.some((r) => r.tag === 'button')).toBe(true);
-    expect(results.some((r) => r.tag === 'a')).toBe(true);
+    const result = checkFocus();
+    
+    // tabindex 분석
+    expect(result.tabindexAnalysis.positiveTabindex.length).toBe(2); // div, input
+    expect(result.tabindexAnalysis.unnecessaryTabindex.length).toBe(1); // button
+    expect(result.tabindexAnalysis.invalidTabindex.length).toBe(1); // "invalid"
+    expect(result.tabindexAnalysis.hasIssues).toBe(true);
+    
+    // 개별 요소 이슈 검증
+    expect(result.focusIssues.some(item => 
+      item.issues.some((issue: string) => issue.includes('양수 tabindex'))
+    )).toBe(true);
+    expect(result.summary.hasTabindexIssues).toBe(true);
+  });
+
+  it('checkFocus: 키보드 트랩을 감지한다', () => {
+    document.body.innerHTML = `
+      <div role="dialog" style="display: block;">
+        <button>버튼</button>
+        <!-- 닫기 버튼이나 ESC 지원 없음 -->
+      </div>
+      <div role="alertdialog" class="modal" style="display: block;">
+        <input type="text" />
+        <button aria-label="닫기">X</button>
+      </div>
+    `;
+    const result = checkFocus();
+    
+    expect(result.keyboardTraps.length).toBe(1); // 첫 번째 dialog만 트랩
+    expect(result.keyboardTraps[0].role).toBe('dialog');
+    expect(result.keyboardTraps[0].issues).toContain('닫기 버튼 없음');
+    expect(result.keyboardTraps[0].issues).toContain('ESC 키 지원 없음');
+    expect(result.summary.hasKeyboardTraps).toBe(true);
+  });
+
+  it('checkFocus: 포커스 순서를 분석한다', () => {
+    document.body.innerHTML = `
+      <button>첫 번째</button>
+      <input tabindex="5" value="양수 tabindex" />
+      <button tabindex="2">다른 양수</button>
+      <a href="#">마지막</a>
+    `;
+    const result = checkFocus();
+    
+    expect(result.focusOrderAnalysis.hasPositiveTabindex).toBe(true);
+    expect(result.focusOrderAnalysis.orderIssues).toContain('양수 tabindex로 인한 비논리적 탭 순서 가능성');
+    expect(result.focusOrderAnalysis.totalTabbableElements).toBeGreaterThan(0);
+  });
+
+  // 확장된 통합 테스트
+  it('checkFocus: 모든 기능이 통합적으로 동작한다', () => {
+    document.body.innerHTML = `
+      <button onfocus="blur()" tabindex="3">blur + 양수 tabindex</button>
+      <a href="#" style="outline: none;">outline 제거</a>
+      <div role="dialog" style="display: block;">
+        <input type="text" tabindex="invalid" />
+      </div>
+      <button>정상 요소</button>
+    `;
+    const result = checkFocus();
+    
+    // 전체 요약 검증
+    expect(result.summary.totalIssues).toBeGreaterThan(0);
+    expect(result.summary.failureCount).toBe(1); // blur() 요소
+    expect(result.summary.warningCount).toBeGreaterThan(0); // outline, tabindex 이슈
+    expect(result.summary.hasKeyboardTraps).toBe(true);
+    expect(result.summary.hasTabindexIssues).toBe(true);
+    
+    // 각 분석 결과 검증
+    expect(result.focusIssues.length).toBeGreaterThan(0);
+    expect(result.tabindexAnalysis.hasIssues).toBe(true);
+    expect(result.keyboardTraps.length).toBe(1);
+    expect(result.focusOrderAnalysis.hasPositiveTabindex).toBe(true);
   });
 });
 

@@ -520,26 +520,177 @@ export function checkTables() {
 }
 
 /**
- * 6.1.2 초점 이동과 표시
+ * 6.1.2 초점 이동과 표시 검사
+ * 개선사항: tabindex 패턴 검증, 키보드 트랩 감지, 포커스 순서 분석
  */
 export function checkFocus() {
-  const focusableElements = Array.from(document.querySelectorAll('*'));
+  // 포커스 가능한 요소만 선택 (성능 개선)
+  const focusableSelectors = [
+    'a[href]', 'button', 'input:not([type="hidden"])', 'select', 'textarea',
+    '[tabindex]', 'audio[controls]', 'video[controls]', 'iframe', 'object',
+    'embed', 'area[href]', 'summary', '[contenteditable]'
+  ].join(', ');
+  
+  const focusableElements = Array.from(document.querySelectorAll(focusableSelectors));
+  const allTabindexElements = Array.from(document.querySelectorAll('[tabindex]'));
 
-  return focusableElements
+  // tabindex 패턴 분석
+  function analyzeTabindexPatterns() {
+    const positiveTabindex: Array<{element: Element; value: number; tag: string; text: string}> = [];
+    const unnecessaryTabindex: Array<{element: Element; tag: string; text: string}> = [];
+    const invalidTabindex: Array<{element: Element; value: string; tag: string; text: string}> = [];
+    
+    allTabindexElements.forEach((element) => {
+      const tabindexValue = element.getAttribute('tabindex');
+      const tabindexNum = parseInt(tabindexValue || '0');
+      
+      // 양수 tabindex 감지 (안티패턴)
+      if (tabindexNum > 0) {
+        positiveTabindex.push({
+          element,
+          value: tabindexNum,
+          tag: element.tagName.toLowerCase(),
+          text: element.textContent?.trim() || ''
+        });
+      }
+      
+      // 불필요한 tabindex="0" 감지
+      const isNaturallyFocusable = element.matches(
+        'a[href], button, input:not([type="hidden"]), select, textarea, audio[controls], video[controls], iframe'
+      );
+      if (tabindexValue === '0' && isNaturallyFocusable) {
+        unnecessaryTabindex.push({
+          element,
+          tag: element.tagName.toLowerCase(),
+          text: element.textContent?.trim() || ''
+        });
+      }
+      
+      // 유효하지 않은 tabindex 값
+      if (isNaN(tabindexNum) || (tabindexValue && !tabindexValue.match(/^-?\d+$/))) {
+        invalidTabindex.push({
+          element,
+          value: tabindexValue || '',
+          tag: element.tagName.toLowerCase(),
+          text: element.textContent?.trim() || ''
+        });
+      }
+    });
+    
+    return {
+      positiveTabindex,
+      unnecessaryTabindex,
+      invalidTabindex,
+      hasIssues: positiveTabindex.length > 0 || unnecessaryTabindex.length > 0 || invalidTabindex.length > 0
+    };
+  }
+
+  // 키보드 트랩 감지
+  function detectKeyboardTraps() {
+    const potentialTraps: Array<{
+      element: Element;
+      tag: string;
+      role: string;
+      focusableElements: number;
+      issues: string[];
+    }> = [];
+    const modalElements = document.querySelectorAll('[role="dialog"], [role="alertdialog"], .modal, [aria-modal="true"]');
+    
+    modalElements.forEach((modal) => {
+      const style = window.getComputedStyle(modal);
+      const isVisible = style.visibility !== 'hidden' && style.display !== 'none';
+      
+      if (isVisible) {
+        const modalFocusableElements = modal.querySelectorAll(focusableSelectors);
+        const hasCloseButton = modal.querySelector('[aria-label*="닫기"], [aria-label*="close"], .close, [data-dismiss]');
+        const hasEscapeHandler = modal.hasAttribute('data-keyboard') || 
+                                modal.querySelector('[data-dismiss="modal"]') ||
+                                modal.getAttribute('onkeydown')?.includes('Escape');
+        
+        if (modalFocusableElements.length > 0 && !hasCloseButton && !hasEscapeHandler) {
+          potentialTraps.push({
+            element: modal,
+            tag: modal.tagName.toLowerCase(),
+            role: modal.getAttribute('role') || 'modal',
+            focusableElements: modalFocusableElements.length,
+            issues: [
+              !hasCloseButton ? '닫기 버튼 없음' : '',
+              !hasEscapeHandler ? 'ESC 키 지원 없음' : ''
+            ].filter(Boolean)
+          });
+        }
+      }
+    });
+    
+    return potentialTraps;
+  }
+
+  // 포커스 순서 분석 (기본적)
+  function analyzeFocusOrder() {
+    const tabbableElements = focusableElements.filter((el) => {
+      const style = window.getComputedStyle(el);
+      const isVisible = style.visibility !== 'hidden' && style.display !== 'none';
+      const tabindex = parseInt(el.getAttribute('tabindex') || '0');
+      
+      return isVisible && tabindex >= 0;
+    });
+    
+    // DOM 순서와 tabindex 순서 비교 (jsdom 환경 고려)
+    const withTabindex = tabbableElements
+      .map((el, index) => ({
+        element: el,
+        domIndex: index,
+        tabindex: parseInt(el.getAttribute('tabindex') || '0'),
+        position: el.getBoundingClientRect()
+      }))
+      // jsdom에서는 getBoundingClientRect가 0을 반환하므로 조건 완화
+      .filter(item => {
+        // 테스트 환경에서는 position 체크를 건너뛰고, 실제 환경에서만 적용
+        const isTestEnv = item.position.width === 0 && item.position.height === 0;
+        return isTestEnv || (item.position.width > 0 && item.position.height > 0);
+      });
+    
+    const orderIssues: string[] = [];
+    let hasPositiveTabindex = false;
+    
+    // 양수 tabindex가 있으면 순서 문제 가능성 높음
+    withTabindex.forEach((item) => {
+      if (item.tabindex > 0) {
+        hasPositiveTabindex = true;
+      }
+    });
+    
+    if (hasPositiveTabindex) {
+      orderIssues.push('양수 tabindex로 인한 비논리적 탭 순서 가능성');
+    }
+    
+    return {
+      totalTabbableElements: tabbableElements.length,
+      hasPositiveTabindex,
+      orderIssues
+    };
+  }
+
+  // 분석 실행
+  const tabindexAnalysis = analyzeTabindexPatterns();
+  const keyboardTraps = detectKeyboardTraps();
+  const focusOrderAnalysis = analyzeFocusOrder();
+
+  // 기존 검사 로직 (blur, outline 검사)
+  const focusIssues = focusableElements
     .map((element) => {
       const style = window.getComputedStyle(element);
-      // jsdom에서는 offsetParent가 항상 null이므로, 스타일로만 판단
-      const isVisible =
-        style.visibility !== 'hidden' && style.display !== 'none';
+      const isVisible = style.visibility !== 'hidden' && style.display !== 'none';
 
       if (!isVisible) {
-        return null; // 숨겨진 요소는 검사하지 않음
+        return null;
       }
 
       let hasBlurEvent = false;
       let hasOutlineZero = false;
       let issueType = '';
       let issueValue = '';
+      const issues = [];
 
       // 1. blur() 이벤트 확인
       const onfocus = element.getAttribute('onfocus');
@@ -549,47 +700,55 @@ export function checkFocus() {
         hasBlurEvent = true;
         issueType = 'blur()';
         issueValue = onfocus;
+        issues.push('blur() 이벤트로 키보드 사용자 차단');
       } else if (onclick && onclick.includes('blur()')) {
         hasBlurEvent = true;
         issueType = 'blur()';
         issueValue = onclick;
+        issues.push('blur() 이벤트로 키보드 사용자 차단');
       }
 
-      // 2. outline:0 스타일 확인
+      // 2. outline 제거 확인 (인라인 스타일)
       const outlineWidth = element.style.getPropertyValue('outline-width');
-      const outlineStyle = element.style.getPropertyValue('outline-style');
-
-      if (outlineWidth === '0px' || outlineWidth === '0') {
-        hasOutlineZero = true;
-        if (!hasBlurEvent) {
-          issueType = 'outline:0';
-          issueValue = `outline-width: ${outlineWidth}, outline-style: ${outlineStyle}`;
-        }
-      }
-
-      // 3. CSS에서 outline 제거 확인
       const cssText = element.style.cssText || '';
-      if (
-        cssText.includes('outline: none') ||
-        cssText.includes('outline: 0') ||
-        cssText.includes('outline-width: 0')
-      ) {
+      
+      if (outlineWidth === '0px' || outlineWidth === '0' ||
+          cssText.includes('outline: none') ||
+          cssText.includes('outline: 0') ||
+          cssText.includes('outline-width: 0')) {
         hasOutlineZero = true;
         if (!hasBlurEvent) {
           issueType = 'outline:0';
-          issueValue = cssText;
+          issueValue = cssText || `outline-width: ${outlineWidth}`;
+        }
+        issues.push('포커스 표시 제거 - 커스텀 포커스 스타일 권장');
+      }
+
+      // 3. tabindex 관련 이슈
+      const tabindexValue = element.getAttribute('tabindex');
+      if (tabindexValue) {
+        const tabindexNum = parseInt(tabindexValue);
+        if (tabindexNum > 0) {
+          issues.push(`양수 tabindex(${tabindexNum}) - 탭 순서 문제 가능성`);
+        }
+        if (isNaN(tabindexNum)) {
+          issues.push(`유효하지 않은 tabindex 값: ${tabindexValue}`);
         }
       }
-      const visible =
-        element.offsetParent !== null &&
+
+      // valid 판정
+      let valid = 'pass';
+      if (hasBlurEvent) {
+        valid = 'fail';
+      } else if (hasOutlineZero || issues.some((issue: string) => issue.includes('tabindex'))) {
+        valid = 'warning';
+      }
+
+      if (issues.length === 0) return null; // 문제없는 요소는 제외
+
+      const visible = element.offsetParent !== null &&
         style.visibility !== 'hidden' &&
         style.display !== 'none';
-
-      // 4. valid 판정
-      let valid = 'pass';
-      if (hasBlurEvent || hasOutlineZero) {
-        valid = 'fail';
-      }
 
       return {
         element: element,
@@ -597,13 +756,30 @@ export function checkFocus() {
         text: element.textContent?.trim() || '',
         issueType,
         issueValue,
+        issues,
         valid,
         hasBlurEvent,
         hasOutlineZero,
+        tabindex: tabindexValue,
         hidden: !visible,
       };
     })
-    .filter((item) => item !== null && item.valid === 'fail'); // 문제가 있는 요소만 반환
+    .filter((item) => item !== null);
+
+  // 통합 결과 반환
+  return {
+    focusIssues, // 개별 요소의 포커스 문제들
+    tabindexAnalysis, // tabindex 사용 패턴 분석
+    keyboardTraps, // 키보드 트랩 감지
+    focusOrderAnalysis, // 포커스 순서 분석
+    summary: {
+      totalIssues: focusIssues.length,
+      failureCount: focusIssues.filter(item => item.valid === 'fail').length,
+      warningCount: focusIssues.filter(item => item.valid === 'warning').length,
+      hasKeyboardTraps: keyboardTraps.length > 0,
+      hasTabindexIssues: tabindexAnalysis.hasIssues
+    }
+  };
 }
 
 /**
