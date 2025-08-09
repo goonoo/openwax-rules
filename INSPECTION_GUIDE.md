@@ -159,7 +159,7 @@ const hasScopeTh = allCells.some(cell =>
 #### 검사 대상
 포커스 가능한 요소 (button, input, a[href], [tabindex], 등)와 모달/다이얼로그 인터페이스
 
-#### 반환 구조 (확장됨)
+#### 반환 구조
 ```typescript
 {
   focusIssues: Array<FocusIssue>,      // 개별 요소 문제
@@ -192,7 +192,7 @@ const hasOutlineZero =
   cssText.includes('outline: 0');
 ```
 
-##### 2. tabindex 패턴 분석 (NEW)
+##### 2. tabindex 패턴 분석
 ```typescript
 // 양수 tabindex 감지 (안티패턴)
 if (tabindexNum > 0) {
@@ -213,7 +213,7 @@ if (isNaN(tabindexNum) || !tabindexValue.match(/^-?\d+$/)) {
 }
 ```
 
-##### 3. 키보드 트랩 감지 (NEW)
+##### 3. 키보드 트랩 감지
 ```typescript
 // 모달/다이얼로그 요소 검사
 const modalElements = document.querySelectorAll(
@@ -232,7 +232,7 @@ if (!hasCloseButton && !hasEscapeHandler) {
 }
 ```
 
-##### 4. 포커스 순서 분석 (NEW)
+##### 4. 포커스 순서 분석
 ```typescript
 // 양수 tabindex 사용 시 순서 문제 경고
 const hasPositiveTabindex = elements.some(el => 
@@ -244,7 +244,7 @@ if (hasPositiveTabindex) {
 }
 ```
 
-#### 판정 기준 (확장됨)
+#### 판정 기준
 
 ##### 개별 요소 판정
 | 문제 유형 | 판정 | 비고 |
@@ -259,7 +259,7 @@ if (hasPositiveTabindex) {
 - **tabindex 패턴 문제**: 양수 값, 불필요한 사용 → 사용성 저해
 - **포커스 순서 문제**: 비논리적 탭 순서 → 탐색 혼란
 
-#### 개선 방안 (확장됨)
+#### 개선 방안
 
 ##### 기본 포커스 관리
 - `blur()` 이벤트 **완전 제거** 필수
@@ -712,7 +712,7 @@ const connectedTabpanels = tabs의 aria-controls로 연결된 tabpanel들;
 <input type="text" name="username" title="사용자명">
 ```
 
-### A4. 키보드 접근성 모범 사례 (확장됨)
+### A4. 키보드 접근성 모범 사례
 
 #### ✅ 올바른 포커스 스타일
 ```html
