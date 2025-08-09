@@ -260,6 +260,7 @@ export function checkBgImages() {
 
 /**
  * 5.3.1 표의 구성 검사
+ * 개선사항: headers-id 연결, colspan/rowspan, 레이아웃 테이블 감지, summary 검증
  */
 export function checkTables() {
   return Array.from(document.querySelectorAll('table')).map((table) => {
@@ -293,12 +294,18 @@ export function checkTables() {
 
     function extractCells(section) {
       if (!section) return [];
-      return Array.from(section.querySelectorAll('tr')).map((tr) => {
-        return Array.from(tr.children).map((cell) => {
+      return Array.from(section.querySelectorAll('tr')).map((tr, rowIndex) => {
+        return Array.from(tr.children).map((cell, cellIndex) => {
           return {
             tag: cell.tagName.toLowerCase(),
             text: cell.textContent?.trim() || '',
             scope: cell.getAttribute('scope') || '',
+            // 새로운 확장 정보
+            id: cell.getAttribute('id') || '',
+            headers: cell.getAttribute('headers') || '',
+            colspan: parseInt(cell.getAttribute('colspan') || '1'),
+            rowspan: parseInt(cell.getAttribute('rowspan') || '1'),
+            position: { row: rowIndex, cell: cellIndex },
           };
         });
       });
@@ -307,14 +314,131 @@ export function checkTables() {
     const tableLabel = getTableLabel();
     const hasAnyLabel = !!(tableLabel);
 
-    // valid 판정 로직
+    // 추가 분석 함수들
+    function analyzeHeadersIdConnections() {
+      const allCells = [
+        extractCells(thead),
+        extractCells(tbody),
+        extractCells(tfoot),
+      ].flat(2);
+      
+      const issues = [];
+      const cellsWithHeaders = allCells.filter(cell => cell.headers);
+      const cellsWithId = allCells.filter(cell => cell.id);
+      const idMap = new Map(cellsWithId.map(cell => [cell.id, cell]));
+      
+      // headers 속성을 가진 셀들의 참조 검증
+      cellsWithHeaders.forEach(cell => {
+        const headerIds = cell.headers.split(/\s+/).filter(id => id);
+        headerIds.forEach(headerId => {
+          const referencedCell = idMap.get(headerId);
+          if (!referencedCell) {
+            issues.push(`headers="${cell.headers}"가 존재하지 않는 id "${headerId}"를 참조함`);
+          } else if (referencedCell.tag !== 'th') {
+            issues.push(`headers="${cell.headers}"가 th가 아닌 ${referencedCell.tag}를 참조함`);
+          }
+        });
+      });
+      
+      return {
+        hasHeadersIdConnections: cellsWithHeaders.length > 0,
+        headerConnectionIssues: issues,
+        cellsWithHeaders: cellsWithHeaders.length,
+        cellsWithId: cellsWithId.length,
+      };
+    }
+
+    function analyzeSpannedCells() {
+      const allCells = [
+        extractCells(thead),
+        extractCells(tbody),
+        extractCells(tfoot),
+      ].flat(2);
+      
+      const spannedCells = allCells.filter(cell => cell.colspan > 1 || cell.rowspan > 1);
+      const issues = [];
+      
+      // colspan/rowspan을 사용하는 셀들의 접근성 검증
+      spannedCells.forEach(cell => {
+        if (cell.tag === 'th' && !cell.scope && !cell.id) {
+          issues.push(`${cell.colspan > 1 ? 'colspan' : 'rowspan'} 사용하는 th에 scope 또는 id 권장`);
+        }
+        if (cell.tag === 'td' && (cell.colspan > 1 || cell.rowspan > 1) && !cell.headers) {
+          // 복잡한 구조의 td는 headers 속성으로 명시적 연결 권장
+          if (spannedCells.length > 2) { // 복잡한 경우만
+            issues.push(`복잡한 표에서 span 사용하는 td에 headers 속성 권장`);
+          }
+        }
+      });
+      
+      return {
+        hasSpannedCells: spannedCells.length > 0,
+        spannedCells: spannedCells.length,
+        spanIssues: issues,
+      };
+    }
+
+    function detectLayoutTable() {
+      const allCells = [
+        extractCells(thead),
+        extractCells(tbody),
+        extractCells(tfoot),
+      ].flat(2);
+      
+      // 레이아웃 테이블 감지 휴리스틱
+      const hasTh = allCells.some(cell => cell.tag === 'th');
+      const hasNumericData = allCells.some(cell => /^\d+(\.\d+)?$/.test(cell.text));
+      const hasFormControls = !!table.querySelector('input, button, select, textarea');
+      const rowCount = allCells.length / Math.max(1, allCells.filter((_, i) => i === 0 || allCells[i].position.row > allCells[i-1].position.row).length);
+      
+      let layoutTableScore = 0;
+      
+      // 레이아웃 테이블 지표들
+      if (!hasTh) layoutTableScore += 2; // th 없음
+      if (hasFormControls) layoutTableScore += 2; // 폼 컨트롤 포함
+      if (rowCount <= 2) layoutTableScore += 1; // 행이 적음
+      if (!hasNumericData && !caption && !summary) layoutTableScore += 1; // 데이터성 콘텐츠 없음
+      if (role === 'presentation') layoutTableScore += 3; // 명시적 presentation
+      
+      // 데이터 테이블 지표들 (점수 감소)
+      if (caption) layoutTableScore -= 2; // caption이 있으면 데이터 테이블 가능성 높음
+      if (summary) layoutTableScore -= 1; // summary가 있으면 데이터 테이블 가능성 높음
+      if (hasNumericData) layoutTableScore -= 1; // 숫자 데이터가 있으면 데이터 테이블
+      
+      return {
+        isLikelyLayoutTable: layoutTableScore >= 3,
+        layoutScore: layoutTableScore,
+        indicators: {
+          noTh: !hasTh,
+          hasFormControls,
+          fewRows: rowCount <= 2,
+          noDataLike: !hasNumericData,
+          presentationRole: role === 'presentation',
+        },
+      };
+    }
+
+    // 분석 실행
+    const headersIdAnalysis = analyzeHeadersIdConnections();
+    const spanAnalysis = analyzeSpannedCells();
+    const layoutAnalysis = detectLayoutTable();
+
+    // valid 판정 로직 (확장된 검증 포함)
     let valid = 'fail';
     const issues: string[] = [];
     
-    if (role === 'presentation') {
+    // headers-id 연결 검증 오류 추가
+    issues.push(...headersIdAnalysis.headerConnectionIssues);
+    
+    if (role === 'presentation' || layoutAnalysis.isLikelyLayoutTable) {
       valid = 'warning';
-      if (hasAnyLabel) {
+      if (hasAnyLabel && !layoutAnalysis.indicators.presentationRole) {
+        issues.push('레이아웃 테이블로 보이는데 라벨이 있음 - role="presentation" 추가 권장');
+      } else if (hasAnyLabel && layoutAnalysis.indicators.presentationRole) {
         issues.push('레이아웃 테이블에 불필요한 라벨이 있음');
+      }
+      if (layoutAnalysis.isLikelyLayoutTable && !layoutAnalysis.indicators.presentationRole) {
+        issues.push('레이아웃 목적으로 보임 - CSS Grid/Flexbox 사용 권장');
       }
     } else {
       // thead, tbody, tfoot 전체에서 scope 있는 th가 하나라도 있고, 라벨이 있어야 pass
@@ -331,8 +455,16 @@ export function checkTables() {
       if (!hasTh) {
         valid = 'fail';
         issues.push('제목 셀(th)이 없음');
-      } else if (hasAnyLabel && hasScopeTh) {
+      } else if (hasAnyLabel && (hasScopeTh || headersIdAnalysis.hasHeadersIdConnections)) {
+        // scope가 있거나 headers-id 연결이 있으면 pass
         valid = 'pass';
+        
+        // 복잡한 테이블에 대한 추가 권장사항
+        if (spanAnalysis.hasSpannedCells && !headersIdAnalysis.hasHeadersIdConnections) {
+          if (spanAnalysis.spannedCells > 2) {
+            issues.push('복잡한 표 구조 - headers-id 연결 방식 권장');
+          }
+        }
       } else if (hasAnyLabel && hasTh) {
         valid = 'warning';
         issues.push('scope 속성 추가 권장');
@@ -340,10 +472,19 @@ export function checkTables() {
         valid = 'warning';
         issues.push('표 라벨 추가 권장 (caption, aria-label, aria-labelledby)');
       } else if (!hasAnyLabel && !hasTh) {
-        // 라벨도 없고 th도 없으면 레이아웃 테이블로 간주하여 warning
-        valid = 'warning';
-        issues.push('데이터 테이블이라면 th와 라벨 추가 필요');
+        valid = 'fail';
+        issues.push('데이터 테이블이라면 th와 라벨 모두 필요');
       }
+      
+      // colspan/rowspan 관련 권장사항 추가
+      if (spanAnalysis.spanIssues.length > 0) {
+        issues.push(...spanAnalysis.spanIssues);
+      }
+    }
+    
+    // summary 속성 검증 (HTML5에서는 deprecated이지만 여전히 사용되는 경우)
+    if (summary) {
+      issues.push('summary는 deprecated - caption이나 aria-label 사용 권장');
     }
 
     const style = window.getComputedStyle(table);
@@ -369,6 +510,11 @@ export function checkTables() {
       tbodyCells: extractCells(tbody),
       valid,
       issues,
+      // 새로운 확장 정보
+      headersIdAnalysis,
+      spanAnalysis,
+      layoutAnalysis,
+      role,
     };
   });
 }

@@ -672,9 +672,10 @@ describe('5.3.1 표의 구성 검사: checkTables', () => {
     const results = checkTables();
     expect(results[0].valid).toBe('warning');
   });
-  it('checkTables: th가 없으면 fail', () => {
-    document.body.innerHTML = `<table><thead><tr><td>데이터</td></tr></thead></table>`;
+  it('checkTables: th가 없으면 fail 또는 warning (레이아웃 테이블 감지에 따라)', () => {
+    document.body.innerHTML = `<table><caption>데이터 테이블</caption><thead><tr><td>데이터</td></tr></thead></table>`;
     const results = checkTables();
+    // 라벨이 있는데 th가 없으면 여전히 fail이어야 함
     expect(results[0].valid).toBe('fail');
     expect(results[0].issues).toContain('제목 셀(th)이 없음');
   });
@@ -747,6 +748,276 @@ describe('5.3.1 표의 구성 검사: checkTables', () => {
     const results = checkTables();
     expect(results[0].valid).toBe('warning');
     expect(results[0].issues).toContain('레이아웃 테이블에 불필요한 라벨이 있음');
+  });
+
+  // checkTables 확장 기능 테스트
+  describe('checkTables 확장: headers-id, colspan/rowspan, 레이아웃 감지', () => {
+    it('복잡한 테이블의 headers-id 연결을 올바르게 검증한다', () => {
+      document.body.innerHTML = `
+        <table>
+          <caption>부서별 직급별 인원 현황</caption>
+          <thead>
+            <tr>
+              <th id="dept">부서</th>
+              <th id="manager">과장</th>
+              <th id="staff">직원</th>
+              <th id="total">합계</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th id="dev" headers="dept">개발팀</th>
+              <td headers="dev manager">3</td>
+              <td headers="dev staff">12</td>
+              <td headers="dev total">15</td>
+            </tr>
+            <tr>
+              <th id="design" headers="dept">디자인팀</th>
+              <td headers="design manager">2</td>
+              <td headers="design staff">8</td>
+              <td headers="design total">10</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      const results = checkTables();
+      
+      expect(results[0].valid).toBe('pass');
+      expect(results[0].headersIdAnalysis.hasHeadersIdConnections).toBe(true);
+      expect(results[0].headersIdAnalysis.cellsWithHeaders).toBe(8); // 8개 셀이 headers 속성 사용
+      expect(results[0].headersIdAnalysis.cellsWithId).toBe(6); // 6개 셀이 id 속성 보유
+      expect(results[0].headersIdAnalysis.headerConnectionIssues).toHaveLength(0);
+    });
+
+    it('잘못된 headers-id 연결을 감지한다', () => {
+      document.body.innerHTML = `
+        <table>
+          <caption>잘못된 연결 테이블</caption>
+          <thead>
+            <tr>
+              <th id="header1">헤더1</th>
+              <th id="header2">헤더2</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td headers="nonexistent">데이터1</td>
+              <td headers="header1 wrongref">데이터2</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      const results = checkTables();
+      
+      expect(results[0].headersIdAnalysis.headerConnectionIssues).toHaveLength(2);
+      expect(results[0].headersIdAnalysis.headerConnectionIssues[0]).toContain('존재하지 않는 id "nonexistent"를 참조함');
+      expect(results[0].headersIdAnalysis.headerConnectionIssues[1]).toContain('존재하지 않는 id "wrongref"를 참조함');
+    });
+
+    it('colspan/rowspan 사용 시 접근성 검증한다', () => {
+      document.body.innerHTML = `
+        <table>
+          <caption>병합된 셀이 있는 테이블</caption>
+          <thead>
+            <tr>
+              <th colspan="2" scope="colgroup" id="products">제품</th>
+              <th rowspan="2" scope="rowgroup" id="sales">매출</th>
+            </tr>
+            <tr>
+              <th scope="col" headers="products">이름</th>
+              <th scope="col" headers="products">가격</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td headers="products">노트북</td>
+              <td headers="products">100만원</td>
+              <td headers="sales" rowspan="2">200만원</td>
+            </tr>
+            <tr>
+              <td headers="products">마우스</td>
+              <td headers="products">5만원</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      const results = checkTables();
+      
+      expect(results[0].valid).toBe('pass');
+      expect(results[0].spanAnalysis.hasSpannedCells).toBe(true);
+      expect(results[0].spanAnalysis.spannedCells).toBe(3); // colspan=2, rowspan=2, rowspan=2
+      expect(results[0].spanAnalysis.spanIssues).toHaveLength(0); // 모두 적절히 처리됨
+    });
+
+    it('colspan/rowspan이 부적절하게 사용된 경우 권장사항 제공', () => {
+      document.body.innerHTML = `
+        <table>
+          <caption>복잡한 병합 구조</caption>
+          <thead>
+            <tr>
+              <th colspan="2">제목 없는 병합 헤더</th>
+              <th rowspan="3">다른 병합 헤더</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="2">병합된 데이터1</td>
+            </tr>
+            <tr>
+              <td rowspan="2">병합된 데이터2</td>
+              <td>일반 데이터</td>
+            </tr>
+            <tr>
+              <td colspan="2">또 다른 병합</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      const results = checkTables();
+      
+      expect(results[0].spanAnalysis.hasSpannedCells).toBe(true);
+      expect(results[0].spanAnalysis.spannedCells).toBeGreaterThan(2);
+      expect(results[0].spanAnalysis.spanIssues.length).toBeGreaterThan(0);
+      expect(results[0].spanAnalysis.spanIssues.some((issue: string) => 
+        issue.includes('scope 또는 id 권장') || issue.includes('headers 속성 권장')
+      )).toBe(true);
+    });
+
+    it('레이아웃 테이블을 자동으로 감지한다', () => {
+      document.body.innerHTML = `
+        <table>
+          <tr>
+            <td><img src="logo.jpg" alt="로고"></td>
+            <td>
+              <input type="text" placeholder="검색">
+              <button>검색</button>
+            </td>
+          </tr>
+        </table>
+      `;
+      const results = checkTables();
+      
+      expect(results[0].layoutAnalysis.isLikelyLayoutTable).toBe(true);
+      expect(results[0].layoutAnalysis.indicators.noTh).toBe(true);
+      expect(results[0].layoutAnalysis.indicators.hasFormControls).toBe(true);
+      expect(results[0].valid).toBe('warning');
+      expect(results[0].issues.some((issue: string) => 
+        issue.includes('레이아웃 목적으로 보임') || issue.includes('CSS Grid/Flexbox 사용 권장')
+      )).toBe(true);
+    });
+
+    it('데이터 테이블과 레이아웃 테이블을 구분한다', () => {
+      document.body.innerHTML = `
+        <div>
+          <table id="data-table">
+            <caption>실제 데이터 테이블</caption>
+            <thead>
+              <tr>
+                <th scope="col">이름</th>
+                <th scope="col">나이</th>
+                <th scope="col">점수</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>김철수</td>
+                <td>25</td>
+                <td>95</td>
+              </tr>
+              <tr>
+                <td>이영희</td>
+                <td>30</td>
+                <td>88</td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <table id="layout-table">
+            <tr>
+              <td>메뉴1</td>
+              <td>메뉴2</td>
+              <td>메뉴3</td>
+            </tr>
+          </table>
+        </div>
+      `;
+      const results = checkTables();
+      
+      // 데이터 테이블
+      expect(results[0].layoutAnalysis.isLikelyLayoutTable).toBe(false);
+      expect(results[0].valid).toBe('pass');
+      
+      // 레이아웃 테이블
+      expect(results[1].layoutAnalysis.isLikelyLayoutTable).toBe(true);
+      expect(results[1].valid).toBe('warning');
+    });
+
+    it('summary 속성에 대한 권장사항을 제공한다', () => {
+      document.body.innerHTML = `
+        <table summary="이 테이블은 deprecated summary를 사용함">
+          <thead>
+            <tr>
+              <th scope="col">컬럼1</th>
+              <th scope="col">컬럼2</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>데이터1</td>
+              <td>데이터2</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      const results = checkTables();
+      
+      expect(results[0].summary).toBe('이 테이블은 deprecated summary를 사용함');
+      expect(results[0].issues.some((issue: string) => 
+        issue.includes('summary는 deprecated') && issue.includes('caption이나 aria-label 사용 권장')
+      )).toBe(true);
+    });
+
+    it('복합 시나리오: 모든 확장 기능이 함께 동작한다', () => {
+      document.body.innerHTML = `
+        <table>
+          <caption>종합 테스트 테이블</caption>
+          <thead>
+            <tr>
+              <th id="quarter" scope="col">분기</th>
+              <th id="product" scope="colgroup" colspan="3">제품별 매출</th>
+            </tr>
+            <tr>
+              <th headers="product" scope="col">A제품</th>
+              <th headers="product" scope="col">B제품</th>
+              <th headers="product" scope="col">합계</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th id="q1" headers="quarter" scope="row">1분기</th>
+              <td headers="q1 product">100</td>
+              <td headers="q1 product">200</td>
+              <td headers="q1 product">300</td>
+            </tr>
+            <tr>
+              <th id="q2" headers="quarter" scope="row">2분기</th>
+              <td headers="q2 product">150</td>
+              <td headers="q2 product">250</td>
+              <td headers="q2 product">400</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      const results = checkTables();
+      
+      // 모든 기능이 올바르게 동작해야 함
+      expect(results[0].valid).toBe('pass');
+      expect(results[0].headersIdAnalysis.hasHeadersIdConnections).toBe(true);
+      expect(results[0].headersIdAnalysis.headerConnectionIssues).toHaveLength(0);
+      expect(results[0].spanAnalysis.hasSpannedCells).toBe(true);
+      expect(results[0].layoutAnalysis.isLikelyLayoutTable).toBe(false);
+      expect(results[0].hasAnyLabel).toBe(true);
+    });
   });
 });
 
