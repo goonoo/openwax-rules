@@ -56,7 +56,7 @@ describe('5.1.1 적절한 대체 텍스트 제공 (img) 검사: checkImages', ()
     const results = checkImages();
     expect(results[0].valid).toBe('pass');
     expect(results[1].valid).toBe('fail');
-    expect(results[2].valid).toBe('warning');
+    expect(results[2].valid).toBe('fail'); // 이미지맵 area는 빈 alt도 fail
   });
 
   it('checkImages: 숨겨진 이미지는 hidden: true로 반환된다', () => {
@@ -241,6 +241,125 @@ describe('5.1.1 적절한 대체 텍스트 제공 (img) 검사: checkImages', ()
     expect(results[4].isInteractive).toBe(true);
     expect(results[4].hasMeaninglessAlt).toBe(true);
     expect(results[4].valid).toBe('fail');
+  });
+
+  // 새로운 고도화 기능 테스트
+  describe('checkImages 고도화: SVG, longdesc, 이미지맵 지원', () => {
+    it('SVG 요소의 접근성을 올바르게 검증한다', () => {
+      document.body.innerHTML = `
+        <svg><title>차트 제목</title><desc>상세 설명</desc></svg>
+        <svg aria-label="아이콘"></svg>
+        <svg role="presentation"></svg>
+        <svg></svg>
+      `;
+      const results = checkImages();
+      
+      // title과 desc가 모두 있는 SVG
+      expect(results[0].tagName).toBe('svg');
+      expect(results[0].svgTitle).toBe('차트 제목');
+      expect(results[0].svgDesc).toBe('상세 설명');
+      expect(results[0].valid).toBe('pass');
+      
+      // aria-label이 있는 SVG
+      expect(results[1].tagName).toBe('svg');
+      expect(results[1].valid).toBe('pass');
+      
+      // 장식적 SVG (role="presentation")
+      expect(results[2].tagName).toBe('svg');
+      expect(results[2].valid).toBe('pass');
+      
+      // 접근 가능한 이름이 없는 SVG
+      expect(results[3].tagName).toBe('svg');
+      expect(results[3].valid).toBe('fail');
+      expect(results[3].issues).toContain('SVG에 접근 가능한 이름이 없음 - <title>, alt, aria-label 중 하나 필요');
+    });
+
+    it('longdesc 속성을 올바르게 검증한다', () => {
+      document.body.innerHTML = `
+        <img src="chart.jpg" alt="매출 차트" longdesc="chart-description.html" />
+        <img src="normal.jpg" alt="일반 이미지" />
+      `;
+      const results = checkImages();
+      
+      // 유효한 longdesc가 있는 이미지
+      expect(results[0].longdesc).toBe('chart-description.html');
+      expect(results[0].valid).toBe('pass');
+      expect(results[0].issues).toContain('복잡한 이미지에 대한 상세 설명 제공됨 (longdesc)');
+      
+      // longdesc가 없는 일반 이미지
+      expect(results[1].longdesc).toBe(null);
+      expect(results[1].valid).toBe('pass');
+    });
+
+    it('이미지맵 area 요소를 올바르게 검증한다', () => {
+      document.body.innerHTML = `
+        <map name="navigation">
+          <area href="/home" alt="홈으로 가기" />
+          <area href="/about" alt="" />
+          <area href="/contact" alt="image" />
+          <area href="/products" />
+        </map>
+        <img src="nav.jpg" usemap="#navigation" alt="네비게이션" />
+      `;
+      const results = checkImages();
+      
+      // area 요소들 찾기 (img는 마지막)
+      const areaResults = results.filter(r => r.tagName === 'area');
+      
+      // 적절한 alt가 있는 area
+      expect(areaResults[0].isImageMapArea).toBe(true);
+      expect(areaResults[0].alt).toBe('홈으로 가기');
+      expect(areaResults[0].valid).toBe('pass');
+      
+      // 빈 alt가 있는 area
+      expect(areaResults[1].isImageMapArea).toBe(true);
+      expect(areaResults[1].alt).toBe(''); // 빈 문자열
+      expect(areaResults[1].valid).toBe('fail');
+      expect(areaResults[1].issues).toContain('이미지맵 영역의 alt가 비어있음 - 해당 영역의 목적지나 기능을 설명해야 함');
+      
+      // 무의미한 alt가 있는 area
+      expect(areaResults[2].isImageMapArea).toBe(true);
+      expect(areaResults[2].alt).toBe('image');
+      expect(areaResults[2].hasMeaninglessAlt).toBe(true);
+      expect(areaResults[2].valid).toBe('warning');
+      
+      // alt 속성이 없는 area
+      expect(areaResults[3].isImageMapArea).toBe(true);
+      expect(areaResults[3].alt).toBe(null);
+      expect(areaResults[3].valid).toBe('fail');
+      expect(areaResults[3].issues).toContain('이미지맵 영역에 alt 속성이 없음');
+    });
+
+    it('복합 시나리오: SVG + 이미지맵 + longdesc 함께 테스트', () => {
+      document.body.innerHTML = `
+        <svg role="img" aria-label="복잡한 차트"><title>매출 데이터</title><desc>2024년 1-4분기 매출 증감 현황</desc></svg>
+        <img src="complex-chart.jpg" alt="연도별 매출 비교" longdesc="sales-details.html" />
+        <map name="siteMap">
+          <area href="/dashboard" alt="대시보드" />
+          <area href="/reports" alt="리포트 페이지로 이동" />
+        </map>
+        <img src="sitemap.jpg" usemap="#siteMap" alt="사이트 맵" />
+      `;
+      const results = checkImages();
+      
+      // 복잡한 SVG (최고 수준의 접근성)
+      expect(results[0].tagName).toBe('svg');
+      expect(results[0].svgTitle).toBe('매출 데이터');
+      expect(results[0].svgDesc).toBe('2024년 1-4분기 매출 증감 현황');
+      expect(results[0].valid).toBe('pass');
+      
+      // longdesc가 있는 복잡한 이미지
+      expect(results[1].tagName).toBe('img');
+      expect(results[1].longdesc).toBe('sales-details.html');
+      expect(results[1].valid).toBe('pass');
+      expect(results[1].issues).toContain('복잡한 이미지에 대한 상세 설명 제공됨 (longdesc)');
+      
+      // 이미지맵 area들
+      const areas = results.filter(r => r.isImageMapArea);
+      expect(areas).toHaveLength(2);
+      expect(areas[0].valid).toBe('pass');
+      expect(areas[1].valid).toBe('pass');
+    });
   });
 });
 

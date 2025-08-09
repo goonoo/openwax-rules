@@ -4,10 +4,11 @@
 
 /**
  * 5.1.1 적절한 대체 텍스트 제공 (img) 검사
+ * 개선사항: longdesc 지원, SVG 검증, 이미지맵 강화
  */
 export function checkImages() {
   const images = Array.from(
-    document.querySelectorAll('img, input[type="image"], area'),
+    document.querySelectorAll('img, input[type="image"], area, svg'),
   );
   const baseUrl = window.location.href;
 
@@ -33,6 +34,7 @@ export function checkImages() {
   ];
 
   return images.map((img) => {
+    const tagName = img.tagName.toLowerCase();
     const src = img.getAttribute('src') || '';
     let absoluteSrc = '';
     try {
@@ -49,6 +51,28 @@ export function checkImages() {
 
     const alt = img.getAttribute('alt');
     const longdesc = img.getAttribute('longdesc');
+
+    // SVG 전용 접근성 요소 검사
+    let svgTitle = '';
+    let svgDesc = '';
+    if (tagName === 'svg') {
+      const titleElement = img.querySelector('title');
+      const descElement = img.querySelector('desc');
+      svgTitle = titleElement ? titleElement.textContent?.trim() || '' : '';
+      svgDesc = descElement ? descElement.textContent?.trim() || '' : '';
+    }
+
+    // 이미지맵 area 요소의 특별 처리
+    let isImageMapArea = false;
+    let imageMapParent = null;
+    if (tagName === 'area') {
+      isImageMapArea = true;
+      const mapElement = img.closest('map');
+      if (mapElement) {
+        const mapName = mapElement.getAttribute('name');
+        imageMapParent = document.querySelector(`img[usemap="#${mapName}"]`);
+      }
+    }
 
     // 이미지 용도 분류
     const isInteractive = !!(
@@ -68,37 +92,88 @@ export function checkImages() {
     let valid: 'pass' | 'warning' | 'fail' = 'pass';
     const issues: string[] = [];
 
-    if (alt === null) {
-      // alt 속성이 없음
-      valid = 'fail';
-      issues.push('alt 속성이 없음');
-    } else if (isInteractive) {
-      // 상호작용 이미지는 엄격한 검증
-      if (alt === '') {
+    // SVG 이미지 특별 검증
+    if (tagName === 'svg') {
+      const hasAccessibleName = !!(alt || svgTitle || img.getAttribute('aria-label') || img.getAttribute('aria-labelledby'));
+      const isDecorativeSvg = img.getAttribute('role') === 'img' || img.getAttribute('role') === 'presentation' || img.getAttribute('aria-hidden') === 'true';
+      
+      if (!isDecorativeSvg && !hasAccessibleName) {
         valid = 'fail';
-        issues.push('상호작용 이미지의 alt가 비어있음');
+        issues.push('SVG에 접근 가능한 이름이 없음 - <title>, alt, aria-label 중 하나 필요');
+      } else if (svgTitle && svgDesc) {
+        // 복잡한 SVG에는 title과 desc 모두 권장
+        if (valid !== 'fail') valid = 'pass';
+      } else if (hasAccessibleName && !isDecorativeSvg) {
+        if (valid !== 'fail') valid = 'pass';
+      }
+    }
+    // 이미지맵 area 특별 검증
+    else if (isImageMapArea) {
+      if (alt === null) {
+        valid = 'fail';
+        issues.push('이미지맵 영역에 alt 속성이 없음');
+      } else if (alt === '') {
+        valid = 'fail';
+        issues.push('이미지맵 영역의 alt가 비어있음 - 해당 영역의 목적지나 기능을 설명해야 함');
       } else if (hasMeaninglessAlt) {
-        valid = 'fail';
-        issues.push('상호작용 이미지의 alt가 무의미함');
-      }
-    } else if (isDecorative) {
-      // 명시적으로 장식적으로 표시된 이미지
-      if (alt !== '') {
         valid = 'warning';
-        issues.push('장식적 이미지에 불필요한 alt 텍스트');
+        issues.push('이미지맵 영역의 alt가 무의미함 - 링크 목적지나 기능을 명확히 설명 필요');
       }
-    } else if (alt === '') {
-      // 일반 이미지에서 빈 alt는 기존 로직 유지 (warning)
-      valid = 'warning';
-      issues.push('alt가 비어있음 - 장식적이라면 role="presentation" 추가, 의미가 있다면 적절한 대체 텍스트 필요');
-    } else if (hasMeaninglessAlt) {
-      // 무의미한 alt 텍스트
-      valid = 'warning';
-      issues.push('무의미한 alt 텍스트 - 이미지의 목적과 내용을 설명하는 텍스트 필요');
+    }
+    // 일반 이미지 검증 (기존 로직 + longdesc 지원)
+    else {
+      if (alt === null) {
+        // alt 속성이 없음
+        valid = 'fail';
+        issues.push('alt 속성이 없음');
+      } else if (isInteractive) {
+        // 상호작용 이미지는 엄격한 검증
+        if (alt === '') {
+          valid = 'fail';
+          issues.push('상호작용 이미지의 alt가 비어있음');
+        } else if (hasMeaninglessAlt) {
+          valid = 'fail';
+          issues.push('상호작용 이미지의 alt가 무의미함');
+        }
+      } else if (isDecorative) {
+        // 명시적으로 장식적으로 표시된 이미지
+        if (alt !== '') {
+          valid = 'warning';
+          issues.push('장식적 이미지에 불필요한 alt 텍스트');
+        }
+      } else if (alt === '') {
+        // 일반 이미지에서 빈 alt는 기존 로직 유지 (warning)
+        valid = 'warning';
+        issues.push('alt가 비어있음 - 장식적이라면 role="presentation" 추가, 의미가 있다면 적절한 대체 텍스트 필요');
+      } else if (hasMeaninglessAlt) {
+        // 무의미한 alt 텍스트
+        valid = 'warning';
+        issues.push('무의미한 alt 텍스트 - 이미지의 목적과 내용을 설명하는 텍스트 필요');
+      }
+
+      // longdesc 검증 (복잡한 이미지용)
+      if (longdesc) {
+        try {
+          const longdescUrl = new URL(longdesc, baseUrl);
+          // longdesc 링크가 유효한지 확인은 실제로는 네트워크 요청이 필요하므로 
+          // 여기서는 URL 형식만 검증
+          if (longdescUrl.href) {
+            // longdesc가 있으면 복잡한 이미지로 간주하여 좋은 사례로 평가
+            issues.push('복잡한 이미지에 대한 상세 설명 제공됨 (longdesc)');
+          }
+        } catch {
+          // URL이 올바르지 않더라도 기존 valid 상태를 변경하지 않고 warning으로만 처리
+          if (valid === 'pass') {
+            valid = 'warning';
+          }
+          issues.push('longdesc URL이 올바르지 않음');
+        }
+      }
     }
 
     return {
       element: img,
+      tagName,
       hidden: !visible,
       src: absoluteSrc,
       alt,
@@ -108,6 +183,11 @@ export function checkImages() {
       isInteractive,
       isDecorative,
       hasMeaninglessAlt,
+      // 새로운 필드들
+      svgTitle,
+      svgDesc,
+      isImageMapArea,
+      imageMapParent,
     };
   });
 }
