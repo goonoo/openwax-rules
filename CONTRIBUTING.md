@@ -17,10 +17,29 @@ cd openwax-rules
 npm install
 ```
 
-3. 개발 서버를 시작합니다
+3. 빌드를 실행합니다
 
 ```bash
-npm run start:dev
+npm run build
+```
+
+## 개발에 유용한 명령어
+
+```bash
+# 테스트 실행 (한 번)
+npm test
+
+# 테스트 감시 모드 (파일 변경 시 자동 실행)
+npm run test:watch
+
+# 테스트 커버리지 확인
+npm run test:cov
+
+# 코드 포맷팅
+npm run format
+
+# 린트 검사 및 자동 수정
+npm run lint
 ```
 
 ## 개발 워크플로우
